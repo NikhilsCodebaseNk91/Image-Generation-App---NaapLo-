@@ -8,6 +8,7 @@ export interface ImageFilePayload {
 }
 
 export interface GenerateApiRequest {
+  contractVersion: 'generation-job.v1';
   productId: string;
   outputType: OutputType;
   closeUpTarget?: string;

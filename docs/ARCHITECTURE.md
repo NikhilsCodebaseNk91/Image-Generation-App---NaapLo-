@@ -65,7 +65,7 @@ export interface ImageGenerationProvider {
 In Phase 1, `GeminiImageProvider` implements this interface using `gemini-3.1-flash-image`. In future phases, additional providers (such as OpenRouter, OpenAI, or custom diffusion pipelines) can be added without altering UI code or route handlers.
 
 ### B. Master Prompt Abstraction (`loadMasterPrompt`)
-The master prompt contains domain expertise for Indian women's fashion. In Phase 1, `loadMasterPrompt()` loads `config/master-prompt.md` from disk. In Phase 2, this function can transparently incorporate Google Drive fetching with local file fallback without impacting other application layers.
+The master prompt contains domain expertise for Indian women's fashion. In Phase 1, `loadMasterPrompt()` loads `config/master-prompt.md` from disk and returns a `MasterPromptDocument` containing `source`, `content`, and source identity metadata. In Phase 2, this function can transparently incorporate Google Drive fetching with local file fallback without impacting other application layers.
 
 ### C. Stateless Memory Processing
 In Phase 1, uploaded garment reference photographs and generated images are kept in memory and passed directly through to the AI provider. No images are permanently written to server disk or database tables, ensuring high security and simple stateless scaling.
@@ -73,4 +73,14 @@ In Phase 1, uploaded garment reference photographs and generated images are kept
 ### D. Production Deployment Compatibility
 The application adheres to standard production build scripts:
 - `npm run build`: Compiles Vite frontend into `dist/` and bundles `server.ts` into a self-contained `dist/server.cjs` via `esbuild`.
-- `npm start`: Runs `node dist/server.cjs` which binds to `0.0.0.0:3000` and serves both the Express API and frontend static assets.
+- `npm start`: Sets `NODE_ENV=production` portably, runs `node dist/server.cjs`, and serves both the Express API and frontend static assets.
+
+Development remains explicit through `npm run dev`.
+
+### E. Generation API Transport
+
+The current transport for `POST /api/generate` is JSON rather than multipart form data. Images are
+sent as base64 strings in `referenceImages` and, for correction, `currentGeneratedImage`. Requests
+identify the application contract as `generation-job.v1`. Responses preserve one-job/one-output
+semantics and return one image as raw base64 plus a data URL convenience field. Provider-specific
+request and response shapes remain confined to provider adapters.

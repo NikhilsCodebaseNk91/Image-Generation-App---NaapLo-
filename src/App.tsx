@@ -42,10 +42,11 @@ export default function App() {
   }, []);
 
   // Validation rules for Phase 1
+  const hasProductId = productId.trim().length > 0;
   const hasReferences = referenceImages.length > 0;
   const isCloseUpSelected = selectedOutputType === 'CLOSE-UP';
   const hasCloseUpTarget = closeUpTarget.trim().length > 0;
-  const canGenerate = hasReferences && (!isCloseUpSelected || hasCloseUpTarget) && !isGenerating;
+  const canGenerate = hasProductId && hasReferences && (!isCloseUpSelected || hasCloseUpTarget) && !isGenerating;
 
   // Add reference images (deduplicating by name)
   const handleAddImages = (newImages: ImageFilePayload[]) => {
@@ -83,6 +84,7 @@ export default function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          contractVersion: 'generation-job.v1',
           productId: productId.trim() || undefined,
           outputType: selectedOutputType,
           closeUpTarget: isCloseUpSelected ? closeUpTarget.trim() : undefined,
@@ -143,6 +145,7 @@ export default function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          contractVersion: 'generation-job.v1',
           productId: productId.trim() || undefined,
           outputType: selectedOutputType,
           closeUpTarget: isCloseUpSelected ? closeUpTarget.trim() : undefined,
@@ -279,6 +282,11 @@ export default function App() {
                 </button>
 
                 {/* Validation helper message */}
+                {!hasProductId && (
+                  <p className="text-[11px] text-stone-500 text-center mt-2">
+                    Please enter a Product ID to enable generation.
+                  </p>
+                )}
                 {!hasReferences && (
                   <p className="text-[11px] text-stone-500 text-center mt-2">
                     Please upload at least 1 garment reference photograph to enable generation.

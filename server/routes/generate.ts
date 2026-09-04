@@ -22,7 +22,24 @@ generateRouter.post('/generate', async (req: Request, res: Response) => {
     const referenceImages = Array.isArray(body.referenceImages) ? body.referenceImages : [];
     const currentGeneratedImage = body.currentGeneratedImage;
 
-    // 1. Validate Output Type
+    // 1. Validate application contract and product identity
+    if (body.contractVersion !== 'generation-job.v1') {
+      res.status(400).json({
+        success: false,
+        error: 'Unsupported or missing contractVersion. Expected "generation-job.v1".',
+      } satisfies GenerateApiResponse);
+      return;
+    }
+
+    if (!productId) {
+      res.status(400).json({
+        success: false,
+        error: 'Product ID is required for every generation job.',
+      } satisfies GenerateApiResponse);
+      return;
+    }
+
+    // 2. Validate Output Type
     if (!outputType) {
       res.status(400).json({
         success: false,
@@ -39,7 +56,7 @@ generateRouter.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
-    // 2. Validate Reference Images
+    // 3. Validate Reference Images
     if (referenceImages.length === 0) {
       res.status(400).json({
         success: false,
@@ -74,7 +91,7 @@ generateRouter.post('/generate', async (req: Request, res: Response) => {
       }
     }
 
-    // 3. Validate CLOSE-UP target requirement
+    // 4. Validate CLOSE-UP target requirement
     if (outputType === 'CLOSE-UP' && !closeUpTarget) {
       res.status(400).json({
         success: false,
@@ -83,7 +100,7 @@ generateRouter.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
-    // 4. Validate Correction requirements
+    // 5. Validate Correction requirements
     if (correction && !currentGeneratedImage) {
       res.status(400).json({
         success: false,
@@ -92,10 +109,10 @@ generateRouter.post('/generate', async (req: Request, res: Response) => {
       return;
     }
 
-    // 5. Load authoritative master prompt
-    const masterPrompt = await loadMasterPrompt();
+    // 6. Load authoritative master prompt
+    const masterPromptDocument = await loadMasterPrompt();
 
-    // 6. Gather required system assets based on output type
+    // 7. Gather required system assets based on output type
     const systemAssets: {
       logo?: Awaited<ReturnType<typeof getNaapLoLogoAsset>>;
       multipleOutfitRef?: Awaited<ReturnType<typeof getMultipleOutfitRefAsset>>;
@@ -109,12 +126,12 @@ generateRouter.post('/generate', async (req: Request, res: Response) => {
       systemAssets.logo = await getNaapLoLogoAsset();
     }
 
-    // 7. Execute generation through the ImageGenerationProvider abstraction
+    // 8. Execute generation through the ImageGenerationProvider abstraction
     const provider = getImageProvider();
     const result = await provider.generateImage({
       productId,
       outputType,
-      masterPrompt,
+      masterPrompt: masterPromptDocument.content,
       closeUpTarget: closeUpTarget || undefined,
       correction: correction || undefined,
       referenceImages,

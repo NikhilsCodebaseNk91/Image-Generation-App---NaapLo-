@@ -5,7 +5,7 @@ import { OUTPUT_TYPES, OUTPUT_TYPE_CONFIGS } from './shared/outputTypes.ts';
 import type { HealthCheckResponse } from './shared/types.ts';
 import { generateRouter } from './server/routes/generate.ts';
 
-const PORT = 3000;
+const PORT = Number.parseInt(process.env.PORT || '3000', 10);
 const app = express();
 
 // Enable JSON body parsing with sufficient limit for multiple high-res garment photos
@@ -19,7 +19,7 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     provider: process.env.IMAGE_PROVIDER || 'gemini',
-    model: process.env.GEMINI_IMAGE_MODEL || process.env.IMAGE_MODEL || 'gemini-3.1-flash-image',
+    model: process.env.IMAGE_MODEL || 'gemini-3.1-flash-image',
     hasApiKey,
   };
   res.json(response);

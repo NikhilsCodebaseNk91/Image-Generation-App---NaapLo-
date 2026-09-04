@@ -37,9 +37,19 @@ The application will be accessible at: `http://localhost:3000`
 # Compile Vite frontend and bundle server into dist/server.cjs
 npm run build
 
-# Start production server
+# Start production server (sets NODE_ENV=production portably on Windows/Linux)
 npm start
 ```
+
+`IMAGE_MODEL` is the single authoritative model setting. Provider API keys remain server-side.
+
+## Generation API transport
+
+`POST /api/generate` uses JSON with base64-encoded image payloads (`Content-Type: application/json`).
+The request includes `contractVersion: "generation-job.v1"`, one `outputType`, and one or more
+`referenceImages`. A successful response returns one image as `base64` plus a browser-ready
+`dataUrl`. This transport encoding preserves the provider-neutral one-job/one-output contract;
+provider-specific payloads remain inside the selected image-provider adapter.
 
 ---
 

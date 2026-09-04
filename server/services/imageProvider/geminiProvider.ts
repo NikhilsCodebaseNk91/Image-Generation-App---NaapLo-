@@ -27,10 +27,7 @@ export class GeminiImageProvider implements ImageGenerationProvider {
       );
     }
 
-    const modelName =
-      process.env.GEMINI_IMAGE_MODEL ||
-      process.env.IMAGE_MODEL ||
-      'gemini-3.1-flash-image';
+    const modelName = process.env.IMAGE_MODEL || 'gemini-3.1-flash-image';
 
     const startTime = Date.now();
 
