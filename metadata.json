@@ -1,0 +1,6 @@
+{
+  "name": "NaapLo Catalogue Generator",
+  "description": "Professional catalogue image generation for Indian women's garments using the Gemini API.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
