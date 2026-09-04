@@ -9,15 +9,15 @@ Built with **React**, **Vite**, **TypeScript**, **Node.js**, **Express**, and th
 ## Quick Start Guide
 
 ### 1. Environment Configuration
-Copy the example environment file and add your Gemini API Key:
+Copy the example environment file and add your provider API key:
 ```bash
 cp .env.example .env
 ```
-Ensure `GEMINI_API_KEY` is populated:
+For the default OpenAI provider, configure the server-side key:
 ```env
-GEMINI_API_KEY="your-gemini-api-key-here"
-IMAGE_PROVIDER="gemini"
-IMAGE_MODEL="gemini-3.1-flash-image"
+OPENAI_API_KEY="your-openai-api-key-here"
+IMAGE_PROVIDER="openai"
+IMAGE_MODEL="gpt-image-2"
 PORT=3000
 ```
 
@@ -41,7 +41,7 @@ npm run build
 npm start
 ```
 
-`IMAGE_MODEL` is the single authoritative model setting. Provider API keys remain server-side.
+`IMAGE_MODEL` is the single authoritative model setting. Provider API keys remain server-side. To use the retained Gemini adapter instead, set `IMAGE_PROVIDER="gemini"`, configure `GEMINI_API_KEY`, and choose a compatible Gemini image model.
 
 ## Generation API transport
 

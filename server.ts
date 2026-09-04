@@ -4,6 +4,7 @@ import path from 'path';
 import { OUTPUT_TYPES, OUTPUT_TYPE_CONFIGS } from './shared/outputTypes.ts';
 import type { HealthCheckResponse } from './shared/types.ts';
 import { generateRouter } from './server/routes/generate.ts';
+import { getImageProviderConfiguration } from './server/services/imageProvider/index.ts';
 
 const PORT = Number.parseInt(process.env.PORT || '3000', 10);
 const app = express();
@@ -14,13 +15,13 @@ app.use(express.urlencoded({ extended: true, limit: '60mb' }));
 
 // Health Check endpoint
 app.get('/api/health', (req, res) => {
-  const hasApiKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 0);
+  const providerConfiguration = getImageProviderConfiguration();
   const response: HealthCheckResponse = {
     status: 'ok',
     timestamp: new Date().toISOString(),
-    provider: process.env.IMAGE_PROVIDER || 'gemini',
-    model: process.env.IMAGE_MODEL || 'gemini-3.1-flash-image',
-    hasApiKey,
+    provider: providerConfiguration.provider,
+    model: providerConfiguration.model,
+    hasApiKey: providerConfiguration.hasApiKey,
   };
   res.json(response);
 });

@@ -62,7 +62,7 @@ export interface ImageGenerationProvider {
   generateImage(request: ProviderGenerateRequest): Promise<ProviderGenerateResult>;
 }
 ```
-In Phase 1, `GeminiImageProvider` implements this interface using `gemini-3.1-flash-image`. In future phases, additional providers (such as OpenRouter, OpenAI, or custom diffusion pipelines) can be added without altering UI code or route handlers.
+`OpenAIImageProvider` is the default live provider and uses the OpenAI Image API with `gpt-image-2`; `GeminiImageProvider` remains available through configuration. Additional providers can be added without altering UI code or route handlers.
 
 ### B. Master Prompt Abstraction (`loadMasterPrompt`)
 The master prompt contains domain expertise for Indian women's fashion. In Phase 1, `loadMasterPrompt()` loads `config/master-prompt.md` from disk and returns a `MasterPromptDocument` containing `source`, `content`, and source identity metadata. In Phase 2, this function can transparently incorporate Google Drive fetching with local file fallback without impacting other application layers.
