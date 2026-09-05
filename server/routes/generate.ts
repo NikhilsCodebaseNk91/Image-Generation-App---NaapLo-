@@ -5,6 +5,8 @@ import { loadMasterPrompt } from '../services/masterPrompt.ts';
 import { getNaapLoLogoAsset, getMultipleOutfitRefAsset } from '../services/systemAssets.ts';
 import { getImageProvider } from '../services/imageProvider/index.ts';
 import { generationRateLimitMiddleware } from '../middleware/security.ts';
+import { applyNaapLoBranding, normalizeGeneratedImageToPng, requiresNaapLoBranding } from '../services/branding.ts';
+import { buildOutputFileName } from '../../shared/outputFileName.ts';
 
 export const generateRouter = Router();
 
@@ -147,10 +149,6 @@ generateRouter.post('/generate', generationRateLimitMiddleware, async (req: Requ
       systemAssets.multipleOutfitRef = await getMultipleOutfitRefAsset();
     }
 
-    if (outputType === 'DESCRIPTIVE CATALOGUE POSTER') {
-      systemAssets.logo = await getNaapLoLogoAsset();
-    }
-
     // 8. Execute generation through the ImageGenerationProvider abstraction
     const provider = getImageProvider();
     const result = await provider.generateImage({
@@ -167,12 +165,32 @@ generateRouter.post('/generate', generationRateLimitMiddleware, async (req: Requ
       requestedQuality: 'ultra',
     });
 
+    let finalImage: {
+      mimeType: string;
+      base64: string;
+      brandingApplied?: boolean;
+      brandingSourceIdentity?: string;
+      brandingPosition?: 'TOP_RIGHT';
+    } = await normalizeGeneratedImageToPng(result.base64);
+
+    if (requiresNaapLoBranding(outputType)) {
+      const logo = await getNaapLoLogoAsset();
+      if (!logo) throw new Error('The approved NaapLo logo asset is unavailable.');
+      finalImage = await applyNaapLoBranding(result.base64, logo);
+    }
+
+    const fileName = buildOutputFileName(productId, outputType);
+
     res.json({
       success: true,
       image: {
-        mimeType: result.mimeType,
-        base64: result.base64,
-        dataUrl: `data:${result.mimeType};base64,${result.base64}`,
+        mimeType: finalImage.mimeType,
+        base64: finalImage.base64,
+        dataUrl: `data:${finalImage.mimeType};base64,${finalImage.base64}`,
+        fileName,
+        brandingApplied: finalImage.brandingApplied,
+        brandingSourceIdentity: finalImage.brandingSourceIdentity,
+        brandingPosition: finalImage.brandingPosition,
       },
       productId,
       outputType,

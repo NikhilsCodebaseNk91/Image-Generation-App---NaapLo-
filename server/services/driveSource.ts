@@ -43,7 +43,7 @@ async function createServiceAccountToken(credentials: ServiceAccountCredentials)
   const header = encodeBase64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const claim = encodeBase64Url(JSON.stringify({
     iss: credentials.client_email,
-    scope: 'https://www.googleapis.com/auth/drive.readonly',
+    scope: 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file',
     aud: tokenUri,
     iat: now,
     exp: now + 3600,
@@ -61,7 +61,7 @@ async function createServiceAccountToken(credentials: ServiceAccountCredentials)
   return { value: payload.access_token, expiresAt: Date.now() + Math.max(60, (payload.expires_in || 3600) - 60) * 1000 };
 }
 
-async function getAccessToken(): Promise<string> {
+export async function getDriveAccessToken(): Promise<string> {
   const direct = process.env.GOOGLE_DRIVE_ACCESS_TOKEN?.trim();
   if (direct) return direct;
   if (cachedAccessToken && cachedAccessToken.expiresAt > Date.now()) return cachedAccessToken.value;
@@ -76,7 +76,7 @@ export function isDriveEnabled(): boolean {
 }
 
 export async function fetchDriveFile(fileId: string, allowedMimeTypes: string[], maxBytes: number): Promise<DriveFileContent> {
-  const token = await getAccessToken();
+  const token = await getDriveAccessToken();
   const apiBase = (process.env.DRIVE_API_BASE_URL || 'https://www.googleapis.com/drive/v3').replace(/\/$/, '');
   const headers = { authorization: `Bearer ${token}` };
   const metadataResponse = await fetch(`${apiBase}/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,modifiedTime,size&supportsAllDrives=true`, { headers });

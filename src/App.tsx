@@ -5,11 +5,11 @@ import { ImageUploader } from './components/ImageUploader.tsx';
 import { OutputTypeSelector } from './components/OutputTypeSelector.tsx';
 import { GeneratedImageViewer } from './components/GeneratedImageViewer.tsx';
 import { StatusAlert } from './components/StatusAlert.tsx';
-import type { GenerateApiRequest, GenerateApiResponse, HealthCheckResponse, ImageFilePayload } from '../shared/types.ts';
+import type { ApprovedOutputUploadRequest, ApprovedOutputUploadResponse, GenerateApiRequest, GenerateApiResponse, HealthCheckResponse, ImageFilePayload } from '../shared/types.ts';
 import { OUTPUT_TYPES, type OutputType } from '../shared/outputTypes.ts';
 
 type JobStatus = 'queued' | 'generating' | 'success' | 'failed';
-interface OutputJob { outputType: OutputType; status: JobStatus; result?: GenerateApiResponse; error?: string; identityUsed?: boolean; }
+interface OutputJob { outputType: OutputType; status: JobStatus; result?: GenerateApiResponse; error?: string; identityUsed?: boolean; approved?: boolean; storageUrl?: string; }
 interface AcceptedIdentity { productId: string; result: GenerateApiResponse; }
 const needsIdentity = (type: OutputType) => type === 'BACK VIEW' || type === 'SIDE VIEW';
 
@@ -79,6 +79,33 @@ export default function App() {
     });
   };
 
+  const handleApproveOutput = async (outputType: OutputType) => {
+    const job = jobs.find((item) => item.outputType === outputType);
+    if (!job?.result?.image?.fileName) return;
+    updateJob(outputType, { approved: true, storageUrl: undefined });
+    if (!serverHealth?.outputStorageConfigured) {
+      setAlertState({ type: 'success', title: `${outputType} Approved`, message: 'This exact result is approved. Drive upload will become available after the destination folder is configured.' });
+      return;
+    }
+    try {
+      const payload: ApprovedOutputUploadRequest = {
+        contractVersion: 'output-approval.v1',
+        approved: true,
+        productId: productId.trim(),
+        outputType,
+        image: { mimeType: 'image/png', base64: job.result.image.base64, fileName: job.result.image.fileName },
+      };
+      const response = await fetch('/api/outputs/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const stored = await response.json() as ApprovedOutputUploadResponse;
+      if (!response.ok || !stored.success) throw new Error(stored.error || 'Drive upload failed.');
+      updateJob(outputType, { approved: true, storageUrl: stored.storageUrl });
+      setAlertState({ type: 'success', title: `${outputType} Approved and Stored`, message: `${stored.fileName} was uploaded to the Product ID folder in Google Drive.` });
+    } catch (error) {
+      updateJob(outputType, { approved: false, storageUrl: undefined });
+      setAlertState({ type: 'error', title: `${outputType} Storage Failed`, message: (error as Error).message });
+    }
+  };
+
   const handleGenerate = async () => {
     if (!canGenerate) return;
     setIsGenerating(true);
@@ -94,7 +121,7 @@ export default function App() {
         const result = await requestGeneration(outputType, { identityResult });
         if (outputType === 'FRONT VIEW') frontResult = result;
         successCount += 1;
-        updateJob(outputType, { status: 'success', result, identityUsed: needsIdentity(outputType) && Boolean(identityResult) });
+        updateJob(outputType, { status: 'success', result, identityUsed: needsIdentity(outputType) && Boolean(identityResult), approved: false, storageUrl: undefined });
       } catch (error) {
         updateJob(outputType, { status: 'failed', error: (error as Error).message });
       }
@@ -117,7 +144,7 @@ export default function App() {
     updateJob(outputType, { status: 'generating', error: undefined });
     try {
       const result = await requestGeneration(outputType, { currentResult: correction ? current.result : undefined, correction, identityResult: frontResult });
-      updateJob(outputType, { status: 'success', result, identityUsed: needsIdentity(outputType) && Boolean(frontResult) });
+      updateJob(outputType, { status: 'success', result, identityUsed: needsIdentity(outputType) && Boolean(frontResult), approved: false, storageUrl: undefined });
       setAlertState({ type: 'success', title: correction ? 'Correction Applied' : 'View Regenerated', message: `${outputType} was updated independently.` });
     } catch (error) {
       updateJob(outputType, { status: current.result?.image ? 'success' : 'failed', error: (error as Error).message, result: current.result });
@@ -170,6 +197,9 @@ export default function App() {
                     identityLocked={job.outputType === 'FRONT VIEW' && hasAcceptedIdentity && acceptedIdentity.result.image?.dataUrl === job.result.image.dataUrl}
                     identityActionLabel={job.outputType === 'FRONT VIEW' && (!hasAcceptedIdentity || acceptedIdentity.result.image?.dataUrl !== job.result.image.dataUrl) ? (hasAcceptedIdentity ? 'Replace locked identity' : 'Use as identity') : undefined}
                     onUseAsIdentity={job.outputType === 'FRONT VIEW' ? () => handleAcceptIdentity(job.result as GenerateApiResponse) : undefined}
+                    isApproved={job.approved}
+                    storageUrl={job.storageUrl}
+                    onApprove={() => handleApproveOutput(job.outputType)}
                     error={job.error}
                   />
                 ) : (
@@ -184,7 +214,7 @@ export default function App() {
           </div>
         </div>
       </main>
-      <footer className="border-t border-stone-200 bg-white py-4 mt-auto"><div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-2"><span>NaapLo Fashion &bull; CP-006 Identity Approval</span><span>Independent jobs &bull; locked FRONT identity continuity</span></div></footer>
+      <footer className="border-t border-stone-200 bg-white py-4 mt-auto"><div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-2"><span>NaapLo Fashion &bull; CP-008 Workflow Automation</span><span>Independent jobs &bull; exact branding &bull; deterministic filenames</span></div></footer>
     </div>
   );
 }

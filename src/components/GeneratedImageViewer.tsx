@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Edit3, Maximize2, RefreshCw, CheckCircle2, Clock, LockKeyhole, UserCheck } from 'lucide-react';
+import { Download, Edit3, Maximize2, RefreshCw, CheckCircle2, Clock, LockKeyhole, UserCheck, BadgeCheck } from 'lucide-react';
 import type { GenerateApiResponse } from '../../shared/types.ts';
 
 interface GeneratedImageViewerProps {
@@ -11,6 +11,9 @@ interface GeneratedImageViewerProps {
   identityLocked?: boolean;
   identityActionLabel?: string;
   onUseAsIdentity?: () => void;
+  isApproved?: boolean;
+  storageUrl?: string;
+  onApprove?: () => void;
   error?: string;
 }
 
@@ -23,6 +26,9 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
   identityLocked = false,
   identityActionLabel,
   onUseAsIdentity,
+  isApproved = false,
+  storageUrl,
+  onApprove,
   error,
 }) => {
   const [correctionText, setCorrectionText] = useState('');
@@ -31,9 +37,7 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
   if (!result.image) return null;
 
   const { dataUrl, mimeType } = result.image;
-  const filename = `NaapLo-${result.productId || 'catalogue'}-${(result.outputType || 'view')
-    .toLowerCase()
-    .replace(/\s+/g, '-')}.png`;
+  const filename = result.image.fileName || `NaapLo-${result.productId || 'catalogue'}-view.png`;
 
   const handleDownload = () => {
     const link = document.createElement('a');
@@ -76,6 +80,22 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
                 Identity locked
               </span>
             )}
+            {result.image.brandingApplied && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                Exact NaapLo logo applied
+              </span>
+            )}
+            {isApproved && (
+              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
+                <BadgeCheck className="w-3 h-3" />
+                Approved for Drive
+              </span>
+            )}
+            {storageUrl && (
+              <a href={storageUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-blue-700 underline underline-offset-2">
+                Open stored file
+              </a>
+            )}
           </div>
           {result.productId && (
             <p className="text-xs text-stone-500 mt-1">
@@ -85,6 +105,17 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {onApprove && !isApproved && (
+            <button
+              type="button"
+              onClick={onApprove}
+              disabled={isCorrecting}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 text-sm font-medium disabled:opacity-40"
+            >
+              <BadgeCheck className="w-4 h-4" />
+              Approve Output
+            </button>
+          )}
           {identityActionLabel && onUseAsIdentity && (
             <button
               type="button"
@@ -118,7 +149,7 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-stone-900 text-white hover:bg-stone-800 text-sm font-medium transition-colors shadow-xs"
           >
             <Download className="w-4 h-4" />
-            Download Image
+            Download {filename}
           </button>
         </div>
       </div>

@@ -62,6 +62,12 @@ The file IDs and minimum approved prompt version are documented in `.env.example
 
 Before exposing the app to the internet, set `ACCESS_PROTECTION_ENABLED=true` with a strong `APP_ACCESS_USERNAME` and `APP_ACCESS_PASSWORD`. CP-007 also applies an in-memory per-IP generation rate limit, request-body limits, per-image and combined-image limits, security headers, and request-ID logs that exclude uploaded images, credentials, prompts, and Product IDs.
 
+### Approved output branding and Drive storage (CP-008)
+
+`SPECIAL POSE`, `DESCRIPTIVE CATALOGUE POSTER`, and `MULTIPLE OUTFIT VIEW` are post-composited with the exact approved NaapLo logo at the top right; the AI provider is not trusted to redraw it. Downloads use deterministic sanitized names such as `NaapLo-B1-special-pose.png`.
+
+To enable approved-only Drive upload, share one parent destination folder with the configured service account as Editor and set `DRIVE_OUTPUT_FOLDER_ID`. Clicking **Approve Output** then creates or reuses a Product ID subfolder and creates or replaces the deterministic PNG. Without that setting, approval remains local and the app clearly reports that storage is not configured.
+
 ## Generation API transport
 
 `POST /api/generate` uses JSON with base64-encoded image payloads (`Content-Type: application/json`).

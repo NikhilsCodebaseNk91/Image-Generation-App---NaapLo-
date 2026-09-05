@@ -25,6 +25,10 @@ export interface GenerateApiResponse {
     mimeType: string;
     base64: string;
     dataUrl: string;
+    fileName?: string;
+    brandingApplied?: boolean;
+    brandingSourceIdentity?: string;
+    brandingPosition?: 'TOP_RIGHT';
   };
   productId?: string;
   outputType?: OutputType;
@@ -41,4 +45,26 @@ export interface HealthCheckResponse {
   provider: string;
   model: string;
   hasApiKey: boolean;
+  outputStorageConfigured: boolean;
+}
+
+export interface ApprovedOutputUploadRequest {
+  contractVersion: 'output-approval.v1';
+  approved: true;
+  productId: string;
+  outputType: OutputType;
+  image: {
+    mimeType: 'image/png';
+    base64: string;
+    fileName: string;
+  };
+}
+
+export interface ApprovedOutputUploadResponse {
+  success: boolean;
+  fileId?: string;
+  fileName?: string;
+  productFolderId?: string;
+  storageUrl?: string;
+  error?: string;
 }

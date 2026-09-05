@@ -4,6 +4,7 @@ import path from 'path';
 import { OUTPUT_TYPES, OUTPUT_TYPE_CONFIGS } from './shared/outputTypes.ts';
 import type { HealthCheckResponse } from './shared/types.ts';
 import { generateRouter } from './server/routes/generate.ts';
+import { outputsRouter } from './server/routes/outputs.ts';
 import { getImageProviderConfiguration } from './server/services/imageProvider/index.ts';
 import { accessProtectionMiddleware, requestSecurityMiddleware } from './server/middleware/security.ts';
 
@@ -29,6 +30,7 @@ app.get('/api/health', (req, res) => {
     provider: providerConfiguration.provider,
     model: providerConfiguration.model,
     hasApiKey: providerConfiguration.hasApiKey,
+    outputStorageConfigured: Boolean(process.env.DRIVE_OUTPUT_FOLDER_ID?.trim()),
   };
   res.json(response);
 });
@@ -43,6 +45,7 @@ app.get('/api/output-types', (req, res) => {
 
 // Image Generation & Correction API
 app.use('/api', generateRouter);
+app.use('/api', outputsRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const status = typeof err === 'object' && err && 'status' in err ? Number((err as { status?: number }).status) : 500;
