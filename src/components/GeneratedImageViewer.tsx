@@ -57,9 +57,9 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
   return (
     <div className="rounded-lg border border-stone-200 bg-white overflow-hidden shadow-xs space-y-6 p-5 sm:p-6">
       {/* Top Bar: View Info & Download */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-4 border-b border-stone-100 pb-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
               <CheckCircle2 className="w-3 h-3" />
               Generated Successfully
@@ -104,13 +104,13 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {onApprove && !isApproved && (
             <button
               type="button"
               onClick={onApprove}
               disabled={isCorrecting}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 text-sm font-medium disabled:opacity-40"
+              className="inline-flex shrink-0 items-center gap-2 px-3 py-2 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 text-sm font-medium disabled:opacity-40"
             >
               <BadgeCheck className="w-4 h-4" />
               Approve Output
@@ -121,7 +121,7 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
               type="button"
               onClick={onUseAsIdentity}
               disabled={isCorrecting}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 text-sm font-medium disabled:opacity-40"
+              className="inline-flex shrink-0 items-center gap-2 px-3 py-2 rounded-md border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 text-sm font-medium disabled:opacity-40"
             >
               <UserCheck className="w-4 h-4" />
               {identityActionLabel}
@@ -138,7 +138,7 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
             type="button"
             onClick={onRegenerate}
             disabled={isCorrecting}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 text-sm font-medium disabled:opacity-40"
+            className="inline-flex shrink-0 items-center gap-2 px-3 py-2 rounded-md border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 text-sm font-medium disabled:opacity-40"
           >
             <RefreshCw className={`w-4 h-4 ${isCorrecting ? 'animate-spin' : ''}`} />
             Regenerate
@@ -146,10 +146,11 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
           <button
             type="button"
             onClick={handleDownload}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-stone-900 text-white hover:bg-stone-800 text-sm font-medium transition-colors shadow-xs"
+            title={`Download ${filename}`}
+            className="inline-flex shrink-0 items-center gap-2 px-4 py-2 rounded-md bg-stone-900 text-white hover:bg-stone-800 text-sm font-medium transition-colors shadow-xs"
           >
             <Download className="w-4 h-4" />
-            Download {filename}
+            Download
           </button>
         </div>
       </div>
