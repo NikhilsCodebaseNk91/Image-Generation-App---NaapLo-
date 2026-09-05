@@ -14,6 +14,7 @@ interface GeneratedImageViewerProps {
   isApproved?: boolean;
   storageUrl?: string;
   onApprove?: () => void;
+  approvalActionLabel?: string;
   error?: string;
 }
 
@@ -29,6 +30,7 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
   isApproved = false,
   storageUrl,
   onApprove,
+  approvalActionLabel = 'Approve Output',
   error,
 }) => {
   const [correctionText, setCorrectionText] = useState('');
@@ -113,7 +115,7 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
               className="inline-flex shrink-0 items-center gap-2 px-3 py-2 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 text-sm font-medium disabled:opacity-40"
             >
               <BadgeCheck className="w-4 h-4" />
-              Approve Output
+              {approvalActionLabel}
             </button>
           )}
           {identityActionLabel && onUseAsIdentity && (

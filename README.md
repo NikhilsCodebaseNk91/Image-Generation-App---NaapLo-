@@ -64,9 +64,9 @@ Before exposing the app to the internet, set `ACCESS_PROTECTION_ENABLED=true` wi
 
 ### Approved output branding and Drive storage (CP-008)
 
-`SPECIAL POSE`, `DESCRIPTIVE CATALOGUE POSTER`, and `MULTIPLE OUTFIT VIEW` are post-composited with the exact approved NaapLo logo at the top right; the AI provider is not trusted to redraw it. Downloads use deterministic sanitized names such as `NaapLo-B1-special-pose.png`.
+`SPECIAL POSE`, `DESCRIPTIVE CATALOGUE POSTER`, and `MULTIPLE OUTFIT VIEW` are post-composited with the exact approved NaapLo logo at the top right; the AI provider is not trusted to redraw it. Downloads use deterministic sanitized names such as `NaapLo-B1-special-pose.png`. Successful multi-view runs can also be downloaded together as one Product-ID-based ZIP archive.
 
-To enable approved-only Drive upload, share one parent destination folder with the configured service account as Editor and set `DRIVE_OUTPUT_FOLDER_ID`. Clicking **Approve Output** then creates or reuses a Product ID subfolder and creates or replaces the deterministic PNG. Without that setting, approval remains local and the app clearly reports that storage is not configured.
+To enable approved-only Drive upload, share one parent destination folder with the configured service account as Editor and set `DRIVE_OUTPUT_FOLDER_ID`. Clicking **Approve & Upload** then creates or reuses a Product ID subfolder and creates or replaces the deterministic PNG. Without that setting, approval remains local and the app clearly reports that storage is not configured.
 
 ## Generation API transport
 
@@ -93,7 +93,7 @@ provider-specific payloads remain inside the selected image-provider adapter.
   - `DESCRIPTIVE CATALOGUE POSTER` (incorporates NaapLo brand emblem)
   - `UNSTITCHED DISPLAY VIEW`
 - **Mandatory Close-Up Target:** Enforced input preventing invalid broad generations when macro detail is requested.
-- **Image Generation & Download:** Generates studio catalogue portraits with one-click full-resolution PNG download.
+- **Image Generation & Download:** Generates studio catalogue portraits with one-click full-resolution PNG download and a ZIP-based Download All action for successful views.
 - **Iterative Correction:** Submit targeted feedback; the system orchestrates the original garment references, the previous generation, and the correction notes for precise revision.
 - **Explicit Identity Approval:** Accept or replace a generated FRONT image as the locked identity reference for later BACK and SIDE views. Changing the Product ID or garment references clears the lock.
 - **Stateless & Portable:** Zero database requirement; run on any ordinary Node.js host (Hostinger VPS, Docker, Linux server).

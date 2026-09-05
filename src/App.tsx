@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import JSZip from 'jszip';
+import { Download, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { Header } from './components/Header.tsx';
 import { ImageUploader } from './components/ImageUploader.tsx';
 import { OutputTypeSelector } from './components/OutputTypeSelector.tsx';
@@ -21,6 +22,7 @@ export default function App() {
   const [jobs, setJobs] = useState<OutputJob[]>([]);
   const [acceptedIdentity, setAcceptedIdentity] = useState<AcceptedIdentity | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const [alertState, setAlertState] = useState<{ type: 'error' | 'warning' | 'success'; title?: string; message: string } | null>(null);
   const [serverHealth, setServerHealth] = useState<HealthCheckResponse | null>(null);
 
@@ -34,6 +36,7 @@ export default function App() {
   const hasCloseUpTarget = closeUpTarget.trim().length > 0;
   const hasAcceptedIdentity = acceptedIdentity?.productId === productId.trim() && Boolean(acceptedIdentity.result.image);
   const canGenerate = hasProductId && hasReferences && selectedOutputTypes.length > 0 && (!needsCloseUpTarget || hasCloseUpTarget) && !isGenerating;
+  const successfulJobs = jobs.filter((job) => job.status === 'success' && job.result?.image);
 
   const updateJob = (outputType: OutputType, patch: Partial<OutputJob>) => {
     setJobs((current) => current.map((job) => job.outputType === outputType ? { ...job, ...patch } : job));
@@ -152,6 +155,30 @@ export default function App() {
     }
   };
 
+  const handleDownloadAll = async () => {
+    if (successfulJobs.length === 0 || isDownloadingAll) return;
+    setIsDownloadingAll(true);
+    try {
+      const zip = new JSZip();
+      for (const job of successfulJobs) {
+        const image = job.result?.image;
+        if (image) zip.file(image.fileName || `NaapLo-${job.outputType}.png`, image.base64, { base64: true });
+      }
+      const archive = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+      const safeProductId = productId.trim().replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '') || 'catalogue';
+      const url = URL.createObjectURL(archive);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `NaapLo-${safeProductId}-catalogue-views.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsDownloadingAll(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-stone-100/60 text-stone-900 flex flex-col font-sans">
       <Header modelName={serverHealth?.model} isHealthy={serverHealth?.status === 'ok'} />
@@ -181,6 +208,24 @@ export default function App() {
             </div>
           </div>
           <div className="lg:col-span-7 space-y-6" id="generation-results">
+            {successfulJobs.length > 0 && (
+              <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-stone-900">Generated catalogue files</p>
+                  <p className="text-xs text-stone-500">Download {successfulJobs.length} successful view{successfulJobs.length === 1 ? '' : 's'} together as one ZIP archive.</p>
+                </div>
+                <button
+                  type="button"
+                  id="download-all-results"
+                  onClick={handleDownloadAll}
+                  disabled={isDownloadingAll}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-stone-900 px-4 py-2.5 text-sm font-medium text-white shadow-xs transition-colors hover:bg-stone-800 disabled:opacity-50"
+                >
+                  {isDownloadingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  {isDownloadingAll ? 'Preparing ZIP...' : `Download All (${successfulJobs.length})`}
+                </button>
+              </div>
+            )}
             {jobs.length === 0 ? (
               <div className="rounded-lg border border-dashed border-stone-300 bg-white/60 p-12 text-center flex flex-col items-center justify-center min-h-[420px] text-stone-400">
                 <Sparkles className="w-8 h-8 mb-3" /><h3 className="text-sm font-medium text-stone-700">Awaiting Generation Request</h3><p className="text-xs text-stone-500 max-w-xs mt-1">Upload garment references, select one to four views, and start generation.</p>
@@ -200,6 +245,7 @@ export default function App() {
                     isApproved={job.approved}
                     storageUrl={job.storageUrl}
                     onApprove={() => handleApproveOutput(job.outputType)}
+                    approvalActionLabel={serverHealth?.outputStorageConfigured ? 'Approve & Upload' : 'Approve Output'}
                     error={job.error}
                   />
                 ) : (
