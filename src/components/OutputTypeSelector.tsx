@@ -12,6 +12,7 @@ interface OutputTypeSelectorProps {
   onChange: (types: OutputType[]) => void;
   closeUpTarget: string;
   onChangeCloseUpTarget: (target: string) => void;
+  hasIdentityReference?: boolean;
   disabled?: boolean;
 }
 
@@ -20,19 +21,20 @@ export const OutputTypeSelector: React.FC<OutputTypeSelectorProps> = ({
   onChange,
   closeUpTarget,
   onChangeCloseUpTarget,
+  hasIdentityReference = false,
   disabled = false,
 }) => {
   const isCloseUp = selectedTypes.includes('CLOSE-UP');
 
   const toggleType = (type: OutputType) => {
     if (selectedTypes.includes(type)) {
-      if (type === 'FRONT VIEW' && selectedTypes.some((item) => item === 'BACK VIEW' || item === 'SIDE VIEW')) return;
+      if (type === 'FRONT VIEW' && !hasIdentityReference && selectedTypes.some((item) => item === 'BACK VIEW' || item === 'SIDE VIEW')) return;
       if (selectedTypes.length > 1) onChange(selectedTypes.filter((item) => item !== type));
       return;
     }
 
     const additions: OutputType[] = [];
-    if ((type === 'BACK VIEW' || type === 'SIDE VIEW') && !selectedTypes.includes('FRONT VIEW')) {
+    if ((type === 'BACK VIEW' || type === 'SIDE VIEW') && !hasIdentityReference && !selectedTypes.includes('FRONT VIEW')) {
       additions.push('FRONT VIEW');
     }
     additions.push(type);
@@ -71,7 +73,9 @@ export const OutputTypeSelector: React.FC<OutputTypeSelectorProps> = ({
         </div>
         <p className="text-xs text-stone-500 flex items-start gap-1.5 pt-1">
           <Info className="w-3.5 h-3.5 text-stone-400 mt-0.5 shrink-0" />
-          <span>Each selected view runs as an independent job. BACK or SIDE automatically includes FRONT for identity continuity.</span>
+          <span>{hasIdentityReference
+            ? 'A locked FRONT identity is available. BACK or SIDE can run without generating a new FRONT.'
+            : 'Each selected view runs as an independent job. BACK or SIDE automatically includes FRONT for identity continuity.'}</span>
         </p>
       </div>
 

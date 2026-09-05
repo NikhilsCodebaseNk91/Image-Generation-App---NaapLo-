@@ -10,6 +10,7 @@ import { OUTPUT_TYPES, type OutputType } from '../shared/outputTypes.ts';
 
 type JobStatus = 'queued' | 'generating' | 'success' | 'failed';
 interface OutputJob { outputType: OutputType; status: JobStatus; result?: GenerateApiResponse; error?: string; identityUsed?: boolean; }
+interface AcceptedIdentity { productId: string; result: GenerateApiResponse; }
 const needsIdentity = (type: OutputType) => type === 'BACK VIEW' || type === 'SIDE VIEW';
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
   const [selectedOutputTypes, setSelectedOutputTypes] = useState<OutputType[]>(['FRONT VIEW']);
   const [closeUpTarget, setCloseUpTarget] = useState('');
   const [jobs, setJobs] = useState<OutputJob[]>([]);
+  const [acceptedIdentity, setAcceptedIdentity] = useState<AcceptedIdentity | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [alertState, setAlertState] = useState<{ type: 'error' | 'warning' | 'success'; title?: string; message: string } | null>(null);
   const [serverHealth, setServerHealth] = useState<HealthCheckResponse | null>(null);
@@ -30,6 +32,7 @@ export default function App() {
   const hasReferences = referenceImages.length > 0;
   const needsCloseUpTarget = selectedOutputTypes.includes('CLOSE-UP');
   const hasCloseUpTarget = closeUpTarget.trim().length > 0;
+  const hasAcceptedIdentity = acceptedIdentity?.productId === productId.trim() && Boolean(acceptedIdentity.result.image);
   const canGenerate = hasProductId && hasReferences && selectedOutputTypes.length > 0 && (!needsCloseUpTarget || hasCloseUpTarget) && !isGenerating;
 
   const updateJob = (outputType: OutputType, patch: Partial<OutputJob>) => {
@@ -62,7 +65,18 @@ export default function App() {
       for (const image of newImages) if (!combined.some((item) => item.name === image.name)) combined.push(image);
       return combined.slice(0, 10);
     });
+    setAcceptedIdentity(null);
     setAlertState(null);
+  };
+
+  const handleAcceptIdentity = (result: GenerateApiResponse) => {
+    const replacing = hasAcceptedIdentity;
+    setAcceptedIdentity({ productId: productId.trim(), result });
+    setAlertState({
+      type: 'success',
+      title: replacing ? 'FRONT Identity Replaced' : 'FRONT Identity Locked',
+      message: 'This approved FRONT image will be used for later BACK and SIDE views. Original garment photographs remain the garment truth.',
+    });
   };
 
   const handleGenerate = async () => {
@@ -76,10 +90,11 @@ export default function App() {
     for (const outputType of order) {
       updateJob(outputType, { status: 'generating', error: undefined });
       try {
-        const result = await requestGeneration(outputType, { identityResult: frontResult });
+        const identityResult = hasAcceptedIdentity ? acceptedIdentity.result : frontResult;
+        const result = await requestGeneration(outputType, { identityResult });
         if (outputType === 'FRONT VIEW') frontResult = result;
         successCount += 1;
-        updateJob(outputType, { status: 'success', result, identityUsed: needsIdentity(outputType) && Boolean(frontResult) });
+        updateJob(outputType, { status: 'success', result, identityUsed: needsIdentity(outputType) && Boolean(identityResult) });
       } catch (error) {
         updateJob(outputType, { status: 'failed', error: (error as Error).message });
       }
@@ -96,7 +111,9 @@ export default function App() {
   const handleRegenerate = async (outputType: OutputType, correction?: string) => {
     const current = jobs.find((job) => job.outputType === outputType);
     if (!current || current.status === 'generating') return;
-    const frontResult = jobs.find((job) => job.outputType === 'FRONT VIEW' && job.status === 'success')?.result;
+    const frontResult = hasAcceptedIdentity
+      ? acceptedIdentity.result
+      : jobs.find((job) => job.outputType === 'FRONT VIEW' && job.status === 'success')?.result;
     updateJob(outputType, { status: 'generating', error: undefined });
     try {
       const result = await requestGeneration(outputType, { currentResult: correction ? current.result : undefined, correction, identityResult: frontResult });
@@ -122,10 +139,10 @@ export default function App() {
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="product-id-input" className="block text-sm font-medium text-stone-800">Product ID (Job Metadata)</label>
-                <input id="product-id-input" type="text" value={productId} disabled={isGenerating} onChange={(event) => setProductId(event.target.value)} placeholder="e.g., NP-2026-SUIT-001" className="w-full rounded-md border border-stone-300 bg-white px-3.5 py-2 text-sm shadow-xs focus:border-stone-900 focus:outline-hidden focus:ring-1 focus:ring-stone-900 disabled:opacity-50 font-mono" />
+                <input id="product-id-input" type="text" value={productId} disabled={isGenerating} onChange={(event) => { setProductId(event.target.value); setAcceptedIdentity(null); }} placeholder="e.g., NP-2026-SUIT-001" className="w-full rounded-md border border-stone-300 bg-white px-3.5 py-2 text-sm shadow-xs focus:border-stone-900 focus:outline-hidden focus:ring-1 focus:ring-stone-900 disabled:opacity-50 font-mono" />
               </div>
-              <ImageUploader images={referenceImages} onAddImages={handleAddImages} onRemoveImage={(index) => setReferenceImages((items) => items.filter((_, itemIndex) => itemIndex !== index))} maxImages={10} disabled={isGenerating} />
-              <OutputTypeSelector selectedTypes={selectedOutputTypes} onChange={setSelectedOutputTypes} closeUpTarget={closeUpTarget} onChangeCloseUpTarget={setCloseUpTarget} disabled={isGenerating} />
+              <ImageUploader images={referenceImages} onAddImages={handleAddImages} onRemoveImage={(index) => { setReferenceImages((items) => items.filter((_, itemIndex) => itemIndex !== index)); setAcceptedIdentity(null); }} maxImages={10} disabled={isGenerating} />
+              <OutputTypeSelector selectedTypes={selectedOutputTypes} onChange={setSelectedOutputTypes} closeUpTarget={closeUpTarget} onChangeCloseUpTarget={setCloseUpTarget} hasIdentityReference={hasAcceptedIdentity} disabled={isGenerating} />
               <div className="pt-2 border-t border-stone-100">
                 <button type="button" id="generate-catalogue-btn" disabled={!canGenerate} onClick={handleGenerate} className="w-full py-3 px-4 rounded-md bg-stone-900 hover:bg-stone-800 text-white font-medium text-sm transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
                   {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /><span>Generating selected views...</span></> : <><Sparkles className="w-4 h-4 text-amber-300" /><span>Generate {selectedOutputTypes.length} Catalogue View{selectedOutputTypes.length === 1 ? '' : 's'}</span></>}
@@ -144,7 +161,17 @@ export default function App() {
             ) : jobs.map((job) => (
               <div key={job.outputType} data-output-job={job.outputType}>
                 {job.status === 'success' && job.result?.image ? (
-                  <GeneratedImageViewer result={job.result} onRegenerate={() => handleRegenerate(job.outputType)} onApplyCorrection={(text) => handleRegenerate(job.outputType, text)} isCorrecting={false} identityUsed={job.identityUsed} error={job.error} />
+                  <GeneratedImageViewer
+                    result={job.result}
+                    onRegenerate={() => handleRegenerate(job.outputType)}
+                    onApplyCorrection={(text) => handleRegenerate(job.outputType, text)}
+                    isCorrecting={false}
+                    identityUsed={job.identityUsed}
+                    identityLocked={job.outputType === 'FRONT VIEW' && hasAcceptedIdentity && acceptedIdentity.result.image?.dataUrl === job.result.image.dataUrl}
+                    identityActionLabel={job.outputType === 'FRONT VIEW' && (!hasAcceptedIdentity || acceptedIdentity.result.image?.dataUrl !== job.result.image.dataUrl) ? (hasAcceptedIdentity ? 'Replace locked identity' : 'Use as identity') : undefined}
+                    onUseAsIdentity={job.outputType === 'FRONT VIEW' ? () => handleAcceptIdentity(job.result as GenerateApiResponse) : undefined}
+                    error={job.error}
+                  />
                 ) : (
                   <div className={`rounded-lg border bg-white p-6 min-h-36 flex items-center justify-between gap-4 ${job.status === 'failed' ? 'border-red-200' : 'border-stone-200'}`}>
                     <div><p className="text-sm font-semibold text-stone-900">{job.outputType}</p><p className={`text-xs mt-1 ${job.status === 'failed' ? 'text-red-700' : 'text-stone-500'}`}>{job.status === 'queued' ? 'Queued — waiting for the previous selected view.' : job.status === 'generating' ? `Generating with ${serverHealth?.model || 'the configured image model'}...` : job.error}</p></div>
@@ -157,7 +184,7 @@ export default function App() {
           </div>
         </div>
       </main>
-      <footer className="border-t border-stone-200 bg-white py-4 mt-auto"><div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-2"><span>NaapLo Fashion &bull; CP-004 Multi-Output Studio</span><span>Independent jobs &bull; FRONT-led identity continuity</span></div></footer>
+      <footer className="border-t border-stone-200 bg-white py-4 mt-auto"><div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-2"><span>NaapLo Fashion &bull; CP-006 Identity Approval</span><span>Independent jobs &bull; locked FRONT identity continuity</span></div></footer>
     </div>
   );
 }

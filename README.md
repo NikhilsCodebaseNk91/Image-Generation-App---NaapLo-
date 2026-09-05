@@ -85,4 +85,5 @@ provider-specific payloads remain inside the selected image-provider adapter.
 - **Mandatory Close-Up Target:** Enforced input preventing invalid broad generations when macro detail is requested.
 - **Image Generation & Download:** Generates studio catalogue portraits with one-click full-resolution PNG download.
 - **Iterative Correction:** Submit targeted feedback; the system orchestrates the original garment references, the previous generation, and the correction notes for precise revision.
+- **Explicit Identity Approval:** Accept or replace a generated FRONT image as the locked identity reference for later BACK and SIDE views. Changing the Product ID or garment references clears the lock.
 - **Stateless & Portable:** Zero database requirement; run on any ordinary Node.js host (Hostinger VPS, Docker, Linux server).

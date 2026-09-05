@@ -68,19 +68,22 @@ export interface ImageGenerationProvider {
 ### B. Drive-Backed Prompt and Asset Abstractions
 The master prompt contains domain expertise for Indian women's fashion. CP-005 adds an authenticated, read-only Google Drive adapter behind `loadMasterPrompt()` and the existing system-asset functions. When `DRIVE_ENABLED=true`, the server fetches the configured Drive files, validates MIME type and size, and requires the master prompt to be approved and at least the configured minimum version. Any authentication, network, validation, or freshness failure uses the registered local fallback without changing callers.
 
-Drive credentials remain server-side. Production can use a base64-encoded service-account JSON; a short-lived bearer token is supported for development and testing. The three Drive files must be shared with the service account's `client_email`.
+Drive credentials remain server-side. Production can use a base64-encoded service-account JSON; local development can point `GOOGLE_SERVICE_ACCOUNT_JSON_FILE` at a protected key file; a short-lived bearer token is supported for testing. The three Drive files must be shared with the service account's `client_email`.
 
-### C. Stateless Memory Processing
+### C. Explicit FRONT Identity Approval
+The browser may retain one approved FRONT output for the current Product ID and reference-image set. BACK and SIDE requests receive that locked image through `identityReference` while the original uploaded photographs remain in `referenceImages`. A newly generated FRONT does not silently replace the locked identity: the operator must explicitly accept or replace it. Changing the Product ID or garment photographs clears the approval to prevent cross-product identity leakage.
+
+### D. Stateless Memory Processing
 In Phase 1, uploaded garment reference photographs and generated images are kept in memory and passed directly through to the AI provider. No images are permanently written to server disk or database tables, ensuring high security and simple stateless scaling.
 
-### D. Production Deployment Compatibility
+### E. Production Deployment Compatibility
 The application adheres to standard production build scripts:
 - `npm run build`: Compiles Vite frontend into `dist/` and bundles `server.ts` into a self-contained `dist/server.cjs` via `esbuild`.
 - `npm start`: Sets `NODE_ENV=production` portably, runs `node dist/server.cjs`, and serves both the Express API and frontend static assets.
 
 Development remains explicit through `npm run dev`.
 
-### E. Generation API Transport
+### F. Generation API Transport
 
 The current transport for `POST /api/generate` is JSON rather than multipart form data. Images are
 sent as base64 strings in `referenceImages` and, for correction, `currentGeneratedImage`. Requests

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Edit3, Maximize2, RefreshCw, CheckCircle2, Clock } from 'lucide-react';
+import { Download, Edit3, Maximize2, RefreshCw, CheckCircle2, Clock, LockKeyhole, UserCheck } from 'lucide-react';
 import type { GenerateApiResponse } from '../../shared/types.ts';
 
 interface GeneratedImageViewerProps {
@@ -8,6 +8,9 @@ interface GeneratedImageViewerProps {
   onRegenerate: () => void;
   isCorrecting?: boolean;
   identityUsed?: boolean;
+  identityLocked?: boolean;
+  identityActionLabel?: string;
+  onUseAsIdentity?: () => void;
   error?: string;
 }
 
@@ -17,6 +20,9 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
   onRegenerate,
   isCorrecting = false,
   identityUsed = false,
+  identityLocked = false,
+  identityActionLabel,
+  onUseAsIdentity,
   error,
 }) => {
   const [correctionText, setCorrectionText] = useState('');
@@ -64,6 +70,12 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
                 FRONT identity linked
               </span>
             )}
+            {identityLocked && (
+              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                <LockKeyhole className="w-3 h-3" />
+                Identity locked
+              </span>
+            )}
           </div>
           {result.productId && (
             <p className="text-xs text-stone-500 mt-1">
@@ -73,6 +85,17 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {identityActionLabel && onUseAsIdentity && (
+            <button
+              type="button"
+              onClick={onUseAsIdentity}
+              disabled={isCorrecting}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 text-sm font-medium disabled:opacity-40"
+            >
+              <UserCheck className="w-4 h-4" />
+              {identityActionLabel}
+            </button>
+          )}
           {result.durationMs && (
             <span className="text-xs text-stone-500 flex items-center gap-1 mr-1">
               <Clock className="w-3.5 h-3.5" />
