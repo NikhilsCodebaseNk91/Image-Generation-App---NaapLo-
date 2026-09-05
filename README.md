@@ -1,8 +1,8 @@
-# NaapLo Catalogue Generator (Phase 1)
+# NaapLo Catalogue Generator
 
-Professional catalogue image generation for Indian women's designer garments (Salwar Kameez, Anarkalis, Kurta Sets, and Unstitched Material) using the Gemini API.
+Professional AI catalogue image generation for Indian women's designer garments, using OpenAI `gpt-image-2` by default with a retained Gemini adapter.
 
-Built with **React**, **Vite**, **TypeScript**, **Node.js**, **Express**, and the official **`@google/genai`** SDK.
+Built with **React**, **Vite**, **TypeScript**, **Node.js**, **Express**, and provider-neutral image-generation adapters.
 
 ---
 
@@ -32,6 +32,8 @@ npm run dev
 ```
 The application will be accessible at: `http://localhost:3000`
 
+The development server must remain running in that terminal while using the localhost URL.
+
 ### 4. Build & Production Start
 ```bash
 # Compile Vite frontend and bundle server into dist/server.cjs
@@ -42,6 +44,17 @@ npm start
 ```
 
 `IMAGE_MODEL` is the single authoritative model setting. Provider API keys remain server-side. To use the retained Gemini adapter instead, set `IMAGE_PROVIDER="gemini"`, configure `GEMINI_API_KEY`, and choose a compatible Gemini image model.
+
+### Optional Google Drive prompt and assets (CP-005)
+
+Keep `DRIVE_ENABLED=false` until server-side Drive authentication is ready. For production, create a Google service account, share the configured prompt/logo/layout files with its `client_email`, base64-encode the complete service-account JSON, and set:
+
+```env
+DRIVE_ENABLED=true
+GOOGLE_SERVICE_ACCOUNT_JSON="base64-encoded-service-account-json"
+```
+
+The file IDs and minimum approved prompt version are documented in `.env.example`. If Drive cannot be authenticated or validated, the application automatically uses the registered local prompt and assets.
 
 ## Generation API transport
 

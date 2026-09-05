@@ -33,7 +33,8 @@ The NaapLo Catalogue Generator is constructed as an ordinary, portable full-stac
 │       │   ├── types.ts            # ImageGenerationProvider interface
 │       │   ├── geminiProvider.ts   # Gemini 3.1 Flash Image implementation
 │       │   └── index.ts            # Provider factory
-│       ├── masterPrompt.ts         # loadMasterPrompt() abstraction
+│       ├── driveSource.ts          # Authenticated Drive read adapter
+│       ├── masterPrompt.ts         # Drive-first prompt loader + local fallback
 │       ├── promptAssembler.ts      # Multi-modal prompt orchestrator
 │       └── systemAssets.ts         # Permanent brand and layout asset loader
 ├── shared/
@@ -64,8 +65,10 @@ export interface ImageGenerationProvider {
 ```
 `OpenAIImageProvider` is the default live provider and uses the OpenAI Image API with `gpt-image-2`; `GeminiImageProvider` remains available through configuration. Additional providers can be added without altering UI code or route handlers.
 
-### B. Master Prompt Abstraction (`loadMasterPrompt`)
-The master prompt contains domain expertise for Indian women's fashion. In Phase 1, `loadMasterPrompt()` loads `config/master-prompt.md` from disk and returns a `MasterPromptDocument` containing `source`, `content`, and source identity metadata. In Phase 2, this function can transparently incorporate Google Drive fetching with local file fallback without impacting other application layers.
+### B. Drive-Backed Prompt and Asset Abstractions
+The master prompt contains domain expertise for Indian women's fashion. CP-005 adds an authenticated, read-only Google Drive adapter behind `loadMasterPrompt()` and the existing system-asset functions. When `DRIVE_ENABLED=true`, the server fetches the configured Drive files, validates MIME type and size, and requires the master prompt to be approved and at least the configured minimum version. Any authentication, network, validation, or freshness failure uses the registered local fallback without changing callers.
+
+Drive credentials remain server-side. Production can use a base64-encoded service-account JSON; a short-lived bearer token is supported for development and testing. The three Drive files must be shared with the service account's `client_email`.
 
 ### C. Stateless Memory Processing
 In Phase 1, uploaded garment reference photographs and generated images are kept in memory and passed directly through to the AI provider. No images are permanently written to server disk or database tables, ensuring high security and simple stateless scaling.
