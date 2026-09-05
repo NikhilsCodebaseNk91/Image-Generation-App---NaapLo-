@@ -97,6 +97,7 @@ export function assemblePrompt(request: ProviderGenerateRequest): AssembledPromp
     outputType,
     closeUpTarget,
     correction,
+    additionalInstructions,
     currentGeneratedImage,
     identityReference,
     masterPrompt,
@@ -188,6 +189,17 @@ A successful FRONT catalogue output is attached as the IDENTITY REFERENCE.
 - Preserve the same adult model identity, face, hair, skin tone, proportions, and overall styling in this requested view.
 - Use it only for person and presentation continuity; do not copy garment construction from it.
 - The original GARMENT REFERENCE IMAGES remain the absolute truth for garment colors, cut, embroidery, fabric, and details.
+`);
+  }
+
+  if (additionalInstructions) {
+    sections.push(`
+==================================================
+OPERATOR-SPECIFIC DIRECTION
+==================================================
+${additionalInstructions}
+
+Apply this direction only where it does not conflict with garment fidelity, safety, output-view framing, or other authoritative master-prompt rules.
 `);
   }
 

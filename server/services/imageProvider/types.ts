@@ -8,6 +8,7 @@ export interface ProviderGenerateRequest {
   masterPrompt: string;
   closeUpTarget?: string;
   correction?: string;
+  additionalInstructions?: string;
   referenceImages: ImageFilePayload[];
   identityReference?: ImageFilePayload;
   currentGeneratedImage?: ImageFilePayload;

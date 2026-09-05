@@ -13,6 +13,8 @@ export interface GenerateApiRequest {
   outputType: OutputType;
   closeUpTarget?: string;
   correction?: string;
+  /** Optional operator direction; master-prompt garment fidelity rules remain authoritative. */
+  additionalInstructions?: string;
   referenceImages: ImageFilePayload[];
   currentGeneratedImage?: ImageFilePayload;
   /** Successful FRONT output used only for model/person continuity across sibling views. */

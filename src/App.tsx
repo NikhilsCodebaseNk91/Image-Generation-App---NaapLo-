@@ -6,6 +6,7 @@ import { ImageUploader } from './components/ImageUploader.tsx';
 import { OutputTypeSelector } from './components/OutputTypeSelector.tsx';
 import { GeneratedImageViewer } from './components/GeneratedImageViewer.tsx';
 import { StatusAlert } from './components/StatusAlert.tsx';
+import { BatchProduction } from './components/BatchProduction.tsx';
 import type { ApprovedOutputUploadRequest, ApprovedOutputUploadResponse, GenerateApiRequest, GenerateApiResponse, HealthCheckResponse, ImageFilePayload } from '../shared/types.ts';
 import { OUTPUT_TYPES, type OutputType } from '../shared/outputTypes.ts';
 
@@ -15,6 +16,7 @@ interface AcceptedIdentity { productId: string; result: GenerateApiResponse; }
 const needsIdentity = (type: OutputType) => type === 'BACK VIEW' || type === 'SIDE VIEW';
 
 export default function App() {
+  const [workspaceMode, setWorkspaceMode] = useState<'single' | 'batch'>('single');
   const [productId, setProductId] = useState('');
   const [referenceImages, setReferenceImages] = useState<ImageFilePayload[]>([]);
   const [selectedOutputTypes, setSelectedOutputTypes] = useState<OutputType[]>(['FRONT VIEW']);
@@ -182,7 +184,14 @@ export default function App() {
   return (
     <div className="min-h-screen bg-stone-100/60 text-stone-900 flex flex-col font-sans">
       <Header modelName={serverHealth?.model} isHealthy={serverHealth?.status === 'ok'} />
+      <nav className="border-b border-stone-200 bg-white" aria-label="Production mode">
+        <div className="mx-auto flex max-w-7xl gap-1 px-4 sm:px-6">
+          <button type="button" onClick={() => setWorkspaceMode('single')} className={`border-b-2 px-4 py-3 text-sm font-medium ${workspaceMode === 'single' ? 'border-stone-900 text-stone-900' : 'border-transparent text-stone-500 hover:text-stone-800'}`}>Single Catalogue</button>
+          <button type="button" id="batch-production-tab" onClick={() => setWorkspaceMode('batch')} className={`border-b-2 px-4 py-3 text-sm font-medium ${workspaceMode === 'batch' ? 'border-stone-900 text-stone-900' : 'border-transparent text-stone-500 hover:text-stone-800'}`}>Batch Production · up to 30</button>
+        </div>
+      </nav>
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-8">
+        {workspaceMode === 'single' ? <>
         {alertState && <StatusAlert {...alertState} onDismiss={() => setAlertState(null)} />}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-5 space-y-6">
@@ -259,8 +268,9 @@ export default function App() {
             ))}
           </div>
         </div>
+        </> : <BatchProduction />}
       </main>
-      <footer className="border-t border-stone-200 bg-white py-4 mt-auto"><div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-2"><span>NaapLo Fashion &bull; CP-008 Workflow Automation</span><span>Independent jobs &bull; exact branding &bull; deterministic filenames</span></div></footer>
+      <footer className="border-t border-stone-200 bg-white py-4 mt-auto"><div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-2"><span>NaapLo Fashion &bull; CP-010 Batch Queue</span><span>Durable jobs &bull; identity-linked views &bull; approved Drive uploads</span></div></footer>
     </div>
   );
 }

@@ -202,7 +202,11 @@ export class OpenAIImageProvider implements ImageGenerationProvider {
         image: uploadFiles,
         prompt: directiveText,
         size: requestedSize(request.aspectRatio),
-        quality: request.requestedQuality === 'standard' ? 'medium' : 'high',
+        quality: request.requestedQuality === 'standard'
+          ? 'low'
+          : request.requestedQuality === 'high'
+            ? 'medium'
+            : 'high',
         output_format: 'png',
       });
 

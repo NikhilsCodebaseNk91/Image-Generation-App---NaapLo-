@@ -1,0 +1,221 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { Check, ChevronDown, ChevronUp, Clock3, Eye, Loader2, Pause, Play, RefreshCw, Send, Square, UploadCloud } from 'lucide-react';
+import type { AddBatchCatalogueRequest, BatchCatalogueSummary, BatchQuality, BatchViewResultResponse, CatalogueBatchSummary, CreateCatalogueBatchRequest } from '../../shared/batchTypes.ts';
+import { OUTPUT_TYPES, type OutputType } from '../../shared/outputTypes.ts';
+import type { ImageFilePayload } from '../../shared/types.ts';
+import { ImageUploader } from './ImageUploader.tsx';
+import { OutputTypeSelector } from './OutputTypeSelector.tsx';
+
+interface DraftCard {
+  key: number;
+  productId: string;
+  referenceImages: ImageFilePayload[];
+  outputTypes: OutputType[];
+  closeUpTarget: string;
+  instructions: string;
+  quality: BatchQuality;
+}
+
+const newCard = (key: number, outputTypes: OutputType[], quality: BatchQuality): DraftCard => ({ key, productId: '', referenceImages: [], outputTypes: [...outputTypes], closeUpTarget: '', instructions: '', quality });
+const encodedType = (type: OutputType) => encodeURIComponent(type);
+const terminalBatch = new Set(['COMPLETED', 'COMPLETED_WITH_FAILURES', 'CANCELLED', 'FAILED']);
+
+async function api<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
+  const data = await response.json() as T & { error?: string };
+  if (!response.ok) throw new Error(data.error || 'The batch request failed.');
+  return data;
+}
+
+const formatDuration = (milliseconds: number) => {
+  if (milliseconds <= 0) return 'Calculating…';
+  const minutes = Math.ceil(milliseconds / 60000);
+  return minutes < 60 ? `about ${minutes} min` : `about ${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+};
+
+const statusTone = (status: string) => status === 'UPLOADED' || status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+  : status === 'FAILED' || status === 'COMPLETED_WITH_FAILURES' ? 'bg-red-50 text-red-800 border-red-200'
+  : status === 'SUCCESS' || status === 'REVIEW_REQUIRED' ? 'bg-amber-50 text-amber-800 border-amber-200'
+  : status === 'GENERATING' || status === 'RUNNING' || status === 'UPLOADING' ? 'bg-blue-50 text-blue-800 border-blue-200'
+  : 'bg-stone-50 text-stone-700 border-stone-200';
+
+export function BatchProduction() {
+  const [count, setCount] = useState(3);
+  const [defaultViews, setDefaultViews] = useState<OutputType[]>(['FRONT VIEW']);
+  const [defaultQuality, setDefaultQuality] = useState<BatchQuality>('draft');
+  const [cards, setCards] = useState<DraftCard[]>(() => Array.from({ length: 3 }, (_, index) => newCard(index, ['FRONT VIEW'], 'draft')));
+  const [expanded, setExpanded] = useState<number | null>(0);
+  const [batch, setBatch] = useState<CatalogueBatchSummary | null>(null);
+  const [review, setReview] = useState<BatchViewResultResponse | null>(null);
+  const [correction, setCorrection] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<CatalogueBatchSummary[]>('/api/batches?limit=10').then((items) => {
+      const resumable = items.find((item) => ['RUNNING', 'PAUSED', 'QUEUED', 'REVIEW_REQUIRED'].includes(item.status));
+      if (resumable) setBatch(resumable);
+    }).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!batch || terminalBatch.has(batch.status) || batch.status === 'PAUSED') return;
+    const timer = window.setInterval(() => {
+      api<CatalogueBatchSummary>(`/api/batches/${batch.id}`).then(setBatch).catch((reason) => setError(reason.message));
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [batch?.id, batch?.status]);
+
+  const updateCount = (next: number) => {
+    const safe = Math.max(1, Math.min(30, next || 1));
+    setCount(safe);
+    setCards((current) => Array.from({ length: safe }, (_, index) => current[index] || newCard(Date.now() + index, defaultViews, defaultQuality)));
+    if (expanded !== null && expanded >= safe) setExpanded(safe - 1);
+  };
+  const patchCard = (index: number, patch: Partial<DraftCard>) => setCards((current) => current.map((card, itemIndex) => itemIndex === index ? { ...card, ...patch } : card));
+  const applyDefaults = () => setCards((current) => current.map((card) => ({ ...card, outputTypes: [...defaultViews], quality: defaultQuality })));
+  const invalidCards = useMemo(() => cards.map((card) => !card.productId.trim() || card.referenceImages.length === 0 || card.outputTypes.length === 0 || (card.outputTypes.includes('CLOSE-UP') && !card.closeUpTarget.trim())), [cards]);
+  const duplicateIds = new Set(cards.map((card) => card.productId.trim().toLowerCase()).filter((id, index, all) => id && all.indexOf(id) !== index));
+  const ready = invalidCards.every((invalid) => !invalid) && duplicateIds.size === 0;
+
+  const startBatch = async () => {
+    if (!ready || busy) return;
+    setBusy(true); setError(null);
+    try {
+      const created = await api<CatalogueBatchSummary>('/api/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contractVersion: 'catalogue-batch.v1', expectedCatalogueCount: cards.length, defaultOutputTypes: defaultViews, defaultQuality } satisfies CreateCatalogueBatchRequest) });
+      setBatch(created);
+      let latest = created;
+      for (const card of cards) {
+        const result = await api<{ batch: CatalogueBatchSummary }>(`/api/batches/${created.id}/catalogues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contractVersion: 'batch-catalogue.v1', productId: card.productId.trim(), outputTypes: card.outputTypes, closeUpTarget: card.closeUpTarget.trim() || undefined, instructions: card.instructions.trim() || undefined, quality: card.quality, referenceImages: card.referenceImages } satisfies AddBatchCatalogueRequest) });
+        latest = result.batch;
+        setBatch(latest);
+      }
+      setBatch(await api<CatalogueBatchSummary>(`/api/batches/${created.id}/start`, { method: 'POST' }));
+    } catch (reason) { setError((reason as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const batchAction = async (action: 'pause' | 'resume' | 'cancel') => {
+    if (!batch) return;
+    setError(null);
+    try { setBatch(await api<CatalogueBatchSummary>(`/api/batches/${batch.id}/${action}`, { method: 'POST' })); }
+    catch (reason) { setError((reason as Error).message); }
+  };
+
+  const viewAction = async (catalogue: BatchCatalogueSummary, outputType: OutputType, action: 'retry' | 'approve' | 'amend') => {
+    if (!batch) return;
+    setError(null);
+    try {
+      const body = action === 'amend' ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ correction }) } : {};
+      setBatch(await api<CatalogueBatchSummary>(`/api/batches/${batch.id}/catalogues/${catalogue.id}/views/${encodedType(outputType)}/${action}`, { method: 'POST', ...body }));
+      if (action === 'amend') { setReview(null); setCorrection(''); }
+    } catch (reason) { setError((reason as Error).message); }
+  };
+
+  const openReview = async (catalogue: BatchCatalogueSummary, outputType: OutputType) => {
+    if (!batch) return;
+    setError(null);
+    try { setReview(await api<BatchViewResultResponse>(`/api/batches/${batch.id}/catalogues/${catalogue.id}/views/${encodedType(outputType)}`)); }
+    catch (reason) { setError((reason as Error).message); }
+  };
+
+  if (batch) {
+    const percent = batch.totalViews ? Math.round(batch.completedViews / batch.totalViews * 100) : 0;
+    return (
+      <div className="space-y-6">
+        {error && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
+        <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-xs">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div><p className="text-xs uppercase tracking-wide text-stone-500">Batch {batch.id.slice(0, 8)}</p><h2 className="font-serif text-xl font-semibold">{batch.catalogueCount} catalogue queue</h2></div>
+            <div className="flex gap-2">
+              {batch.status === 'RUNNING' && <button onClick={() => batchAction('pause')} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm"><Pause className="h-4 w-4" />Pause</button>}
+              {batch.status === 'PAUSED' && <button onClick={() => batchAction('resume')} className="inline-flex items-center gap-2 rounded-md bg-stone-900 px-3 py-2 text-sm text-white"><Play className="h-4 w-4" />Resume</button>}
+              {!terminalBatch.has(batch.status) && <button onClick={() => batchAction('cancel')} className="inline-flex items-center gap-2 rounded-md border border-red-200 px-3 py-2 text-sm text-red-700"><Square className="h-4 w-4" />Cancel</button>}
+            </div>
+          </div>
+          <div className="mt-5 h-2 overflow-hidden rounded-full bg-stone-100"><div className="h-full bg-stone-900 transition-all" style={{ width: `${percent}%` }} /></div>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+            <div><span className="block text-stone-500">Status</span><strong>{batch.status.replaceAll('_', ' ')}</strong></div>
+            <div><span className="block text-stone-500">Progress</span><strong>{batch.completedViews}/{batch.totalViews} views</strong></div>
+            <div><span className="block text-stone-500">Active</span><strong>{batch.activeViews}</strong></div>
+            <div><span className="block text-stone-500">Waiting</span><strong>{batch.queuedViews}</strong></div>
+            <div><span className="block text-stone-500">ETA</span><strong>{formatDuration(batch.estimatedRemainingMs)}</strong></div>
+          </div>
+        </section>
+
+        <div className="space-y-4">
+          {batch.catalogues.map((catalogue, index) => (
+            <section key={catalogue.id} className="rounded-lg border border-stone-200 bg-white p-5 shadow-xs">
+              <div className="flex items-center justify-between gap-3"><div><span className="text-xs text-stone-500">Catalogue {index + 1}</span><h3 className="font-mono font-semibold">{catalogue.productId}</h3></div><span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusTone(catalogue.status)}`}>{catalogue.status.replaceAll('_', ' ')}</span></div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {catalogue.views.map((view) => (
+                  <div key={view.outputType} className="rounded-md border border-stone-200 p-3">
+                    <div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold">{view.outputType}</p><p className="mt-1 text-xs text-stone-500">Attempt {view.attempts}{view.durationMs ? ` · ${(view.durationMs / 1000).toFixed(1)}s` : ''}</p></div><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusTone(view.status)}`}>{view.status.replaceAll('_', ' ')}</span></div>
+                    {view.error && <p className="mt-2 text-xs text-red-700">{view.error}</p>}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {view.hasResult && <button onClick={() => openReview(catalogue, view.outputType)} className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs"><Eye className="h-3.5 w-3.5" />Review</button>}
+                      {(view.status === 'FAILED' || view.status === 'BLOCKED_BY_IDENTITY') && <button onClick={() => viewAction(catalogue, view.outputType, 'retry')} className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs"><RefreshCw className="h-3.5 w-3.5" />Retry</button>}
+                      {view.status === 'SUCCESS' && <button onClick={() => viewAction(catalogue, view.outputType, 'approve')} className="inline-flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 text-xs text-white"><UploadCloud className="h-3.5 w-3.5" />Approve & upload</button>}
+                      {view.storageUrl && <a href={view.storageUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs"><Check className="h-3.5 w-3.5" />Open in Drive</a>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+
+        {review?.image && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
+            <div className="max-h-[92vh] w-full max-w-4xl overflow-auto rounded-lg bg-white p-5 shadow-xl">
+              <div className="flex items-center justify-between"><div><p className="text-xs text-stone-500">{review.productId}</p><h3 className="font-semibold">Review {review.outputType}</h3></div><button onClick={() => setReview(null)} className="rounded border px-3 py-1.5 text-sm">Close</button></div>
+              <img src={review.image.dataUrl} alt={`${review.productId} ${review.outputType}`} className="mx-auto mt-4 max-h-[60vh] rounded border object-contain" />
+              {review.status === 'SUCCESS' && batch.catalogues.find((item) => item.id === review.catalogueId) && (
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <button onClick={() => viewAction(batch.catalogues.find((item) => item.id === review.catalogueId)!, review.outputType!, 'approve')} className="rounded-md bg-emerald-700 px-4 py-2 text-sm text-white">Approve & upload</button>
+                  <input value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder="Describe the amendment…" className="flex-1 rounded-md border px-3 py-2 text-sm" />
+                  <button disabled={!correction.trim()} onClick={() => viewAction(batch.catalogues.find((item) => item.id === review.catalogueId)!, review.outputType!, 'amend')} className="inline-flex items-center justify-center gap-2 rounded-md bg-stone-900 px-4 py-2 text-sm text-white disabled:opacity-40"><Send className="h-4 w-4" />Amend</button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-xs">
+        <div className="flex flex-wrap items-end gap-4">
+          <div><label className="block text-sm font-medium">Number of catalogues</label><input type="number" min={1} max={30} value={count} onChange={(event) => updateCount(Number(event.target.value))} className="mt-1 w-32 rounded-md border px-3 py-2" /></div>
+          <div><label className="block text-sm font-medium">Default quality</label><select value={defaultQuality} onChange={(event) => setDefaultQuality(event.target.value as BatchQuality)} className="mt-1 rounded-md border px-3 py-2"><option value="draft">Draft · faster</option><option value="final">Final · highest detail</option></select></div>
+          <button onClick={applyDefaults} className="rounded-md border px-3 py-2 text-sm">Apply defaults to all cards</button>
+        </div>
+        <div className="mt-4"><OutputTypeSelector selectedTypes={defaultViews} onChange={setDefaultViews} closeUpTarget="" onChangeCloseUpTarget={() => undefined} /></div>
+        <p className="mt-3 flex items-center gap-2 text-xs text-stone-500"><Clock3 className="h-4 w-4" />Two catalogue views run concurrently. BACK and SIDE wait for that catalogue’s FRONT identity.</p>
+      </section>
+
+      {error && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
+      <div className="space-y-3">
+        {cards.map((card, index) => {
+          const isOpen = expanded === index;
+          const duplicate = duplicateIds.has(card.productId.trim().toLowerCase());
+          return (
+            <section key={card.key} className={`rounded-lg border bg-white shadow-xs ${invalidCards[index] || duplicate ? 'border-amber-200' : 'border-emerald-200'}`}>
+              <button type="button" onClick={() => setExpanded(isOpen ? null : index)} className="flex w-full items-center justify-between gap-3 p-4 text-left"><div><span className="text-xs text-stone-500">Catalogue {index + 1}</span><p className="font-medium">{card.productId || 'Product ID not entered'} · {card.referenceImages.length} reference{card.referenceImages.length === 1 ? '' : 's'}</p></div>{isOpen ? <ChevronUp /> : <ChevronDown />}</button>
+              {isOpen && <div className="space-y-5 border-t border-stone-100 p-4">
+                <div><label className="block text-sm font-medium">Product ID</label><input value={card.productId} onChange={(event) => patchCard(index, { productId: event.target.value })} className="mt-1 w-full rounded-md border px-3 py-2 font-mono" placeholder="NPL-2026-001" />{duplicate && <p className="mt-1 text-xs text-red-700">This Product ID is duplicated.</p>}</div>
+                <ImageUploader images={card.referenceImages} onAddImages={(images) => patchCard(index, { referenceImages: [...card.referenceImages, ...images].slice(0, 10) })} onRemoveImage={(imageIndex) => patchCard(index, { referenceImages: card.referenceImages.filter((_, itemIndex) => itemIndex !== imageIndex) })} />
+                <OutputTypeSelector selectedTypes={card.outputTypes} onChange={(types) => patchCard(index, { outputTypes: types })} closeUpTarget={card.closeUpTarget} onChangeCloseUpTarget={(value) => patchCard(index, { closeUpTarget: value })} />
+                <div className="grid gap-4 sm:grid-cols-2"><div><label className="block text-sm font-medium">Quality</label><select value={card.quality} onChange={(event) => patchCard(index, { quality: event.target.value as BatchQuality })} className="mt-1 w-full rounded-md border px-3 py-2"><option value="draft">Draft · faster</option><option value="final">Final · highest detail</option></select></div><div><label className="block text-sm font-medium">Optional direction</label><input value={card.instructions} onChange={(event) => patchCard(index, { instructions: event.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" placeholder="Background, styling, pose…" /></div></div>
+              </div>}
+            </section>
+          );
+        })}
+      </div>
+      <button disabled={!ready || busy} onClick={startBatch} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-stone-900 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}{busy ? 'Creating durable queue…' : `Queue ${cards.length} catalogues`}</button>
+      {!ready && <p className="text-center text-xs text-stone-500">Complete every card and use a unique Product ID for each catalogue.</p>}
+    </div>
+  );
+}
