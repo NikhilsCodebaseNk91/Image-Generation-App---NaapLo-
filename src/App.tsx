@@ -76,7 +76,7 @@ export default function App() {
     setGenerationStep('Assembling garment reference data and master prompt...');
 
     try {
-      setGenerationStep('Calling Gemini 3.1 Flash Image model...');
+      setGenerationStep(`Calling ${serverHealth?.model || 'configured image model'}...`);
 
       const response = await fetch('/api/generate', {
         method: 'POST',
