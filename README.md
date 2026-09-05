@@ -54,6 +54,8 @@ DRIVE_ENABLED=true
 GOOGLE_SERVICE_ACCOUNT_JSON="base64-encoded-service-account-json"
 ```
 
+For local development, keep the key in a protected folder and set `GOOGLE_SERVICE_ACCOUNT_JSON_FILE` to its absolute path instead of copying the credential into `.env`.
+
 The file IDs and minimum approved prompt version are documented in `.env.example`. If Drive cannot be authenticated or validated, the application automatically uses the registered local prompt and assets.
 
 ## Generation API transport

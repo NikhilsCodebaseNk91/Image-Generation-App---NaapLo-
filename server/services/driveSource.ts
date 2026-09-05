@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 
 export const DRIVE_SOURCE_IDS = {
   masterPrompt: '1fo9itawW0tmmNZki8oGCH2fbcuCgokau',
@@ -25,11 +26,14 @@ let cachedAccessToken: { value: string; expiresAt: number } | null = null;
 const encodeBase64Url = (value: string | Buffer) => Buffer.from(value).toString('base64url');
 
 function parseServiceAccount(): ServiceAccountCredentials | null {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
+  const credentialPath = process.env.GOOGLE_SERVICE_ACCOUNT_JSON_FILE?.trim();
+  const raw = credentialPath
+    ? fs.readFileSync(credentialPath, 'utf8').trim()
+    : process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
   if (!raw) return null;
   const decoded = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
   const parsed = JSON.parse(decoded) as ServiceAccountCredentials;
-  if (!parsed.client_email || !parsed.private_key) throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is missing client_email or private_key.');
+  if (!parsed.client_email || !parsed.private_key) throw new Error('Google service-account credentials are missing client_email or private_key.');
   return parsed;
 }
 
