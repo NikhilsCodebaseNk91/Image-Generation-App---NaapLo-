@@ -21,7 +21,16 @@ interface ServiceAccountCredentials {
   token_uri?: string;
 }
 
+export interface GoogleOAuthClientCredentials {
+  client_id: string;
+  client_secret: string;
+  auth_uri: string;
+  token_uri: string;
+  redirect_uris: string[];
+}
+
 let cachedAccessToken: { value: string; expiresAt: number } | null = null;
+let cachedOutputAccessToken: { value: string; expiresAt: number } | null = null;
 
 const encodeBase64Url = (value: string | Buffer) => Buffer.from(value).toString('base64url');
 
@@ -35,6 +44,54 @@ function parseServiceAccount(): ServiceAccountCredentials | null {
   const parsed = JSON.parse(decoded) as ServiceAccountCredentials;
   if (!parsed.client_email || !parsed.private_key) throw new Error('Google service-account credentials are missing client_email or private_key.');
   return parsed;
+}
+
+export function loadGoogleOAuthClient(): GoogleOAuthClientCredentials | null {
+  const credentialPath = process.env.GOOGLE_OAUTH_CLIENT_JSON_FILE?.trim();
+  const raw = credentialPath
+    ? fs.readFileSync(credentialPath, 'utf8').trim()
+    : process.env.GOOGLE_OAUTH_CLIENT_JSON?.trim();
+  if (!raw) return null;
+  const decoded = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
+  const document = JSON.parse(decoded) as { web?: GoogleOAuthClientCredentials; installed?: GoogleOAuthClientCredentials };
+  const credentials = document.web || document.installed;
+  if (!credentials?.client_id || !credentials.client_secret || !credentials.token_uri || !credentials.redirect_uris?.length) {
+    throw new Error('Google OAuth client credentials are incomplete.');
+  }
+  return credentials;
+}
+
+function readGoogleOAuthRefreshToken(): string | null {
+  const direct = process.env.GOOGLE_OAUTH_REFRESH_TOKEN?.trim();
+  if (direct) return direct;
+  const tokenPath = process.env.GOOGLE_OAUTH_REFRESH_TOKEN_FILE?.trim();
+  if (!tokenPath || !fs.existsSync(tokenPath)) return null;
+  const raw = fs.readFileSync(tokenPath, 'utf8').trim();
+  if (!raw) return null;
+  if (!raw.startsWith('{')) return raw;
+  const parsed = JSON.parse(raw) as { refresh_token?: string };
+  return parsed.refresh_token?.trim() || null;
+}
+
+async function createOAuthAccessToken(
+  credentials: GoogleOAuthClientCredentials,
+  refreshToken: string
+): Promise<{ value: string; expiresAt: number }> {
+  const response = await fetch(credentials.token_uri, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: credentials.client_id,
+      client_secret: credentials.client_secret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  });
+  const payload = await response.json() as { access_token?: string; expires_in?: number; error_description?: string };
+  if (!response.ok || !payload.access_token) {
+    throw new Error(payload.error_description || `Google OAuth token refresh failed with HTTP ${response.status}.`);
+  }
+  return { value: payload.access_token, expiresAt: Date.now() + Math.max(60, (payload.expires_in || 3600) - 60) * 1000 };
 }
 
 async function createServiceAccountToken(credentials: ServiceAccountCredentials): Promise<{ value: string; expiresAt: number }> {
@@ -71,6 +128,26 @@ export async function getDriveAccessToken(): Promise<string> {
   return cachedAccessToken.value;
 }
 
+export async function getDriveOutputAccessToken(): Promise<string> {
+  const direct = process.env.GOOGLE_DRIVE_ACCESS_TOKEN?.trim();
+  if (direct) return direct;
+  if (cachedOutputAccessToken && cachedOutputAccessToken.expiresAt > Date.now()) return cachedOutputAccessToken.value;
+  const oauthClient = loadGoogleOAuthClient();
+  const refreshToken = readGoogleOAuthRefreshToken();
+  if (oauthClient && refreshToken) {
+    cachedOutputAccessToken = await createOAuthAccessToken(oauthClient, refreshToken);
+    return cachedOutputAccessToken.value;
+  }
+  return getDriveAccessToken();
+}
+
+export function isDriveOutputStorageConfigured(): boolean {
+  if (!process.env.DRIVE_OUTPUT_FOLDER_ID?.trim()) return false;
+  if (process.env.GOOGLE_DRIVE_ACCESS_TOKEN?.trim()) return true;
+  if (loadGoogleOAuthClient() && readGoogleOAuthRefreshToken()) return true;
+  return Boolean(parseServiceAccount());
+}
+
 export function isDriveEnabled(): boolean {
   return process.env.DRIVE_ENABLED?.trim().toLowerCase() === 'true';
 }
@@ -94,4 +171,5 @@ export async function fetchDriveFile(fileId: string, allowedMimeTypes: string[],
 
 export function resetDriveSourceCacheForTests() {
   cachedAccessToken = null;
+  cachedOutputAccessToken = null;
 }

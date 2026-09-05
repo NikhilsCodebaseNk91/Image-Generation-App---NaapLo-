@@ -66,7 +66,15 @@ Before exposing the app to the internet, set `ACCESS_PROTECTION_ENABLED=true` wi
 
 `SPECIAL POSE`, `DESCRIPTIVE CATALOGUE POSTER`, and `MULTIPLE OUTFIT VIEW` are post-composited with the exact approved NaapLo logo at the top right; the AI provider is not trusted to redraw it. Downloads use deterministic sanitized names such as `NaapLo-B1-special-pose.png`. Successful multi-view runs can also be downloaded together as one Product-ID-based ZIP archive.
 
-To enable approved-only Drive upload, share one parent destination folder with the configured service account as Editor and set `DRIVE_OUTPUT_FOLDER_ID`. Clicking **Approve & Upload** then creates or reuses a Product ID subfolder and creates or replaces the deterministic PNG. Without that setting, approval remains local and the app clearly reports that storage is not configured.
+Approved-output upload to a regular Google My Drive folder uses OAuth because Google service accounts do not have storage quota. Configure `DRIVE_OUTPUT_FOLDER_ID`, `GOOGLE_OAUTH_CLIENT_JSON_FILE`, and `GOOGLE_OAUTH_REFRESH_TOKEN_FILE` in `.env`, then run the one-time authorization flow:
+
+```powershell
+npx tsx scripts/googleDriveOAuthSetup.ts
+```
+
+Open the displayed Google authorization URL and approve Drive access. The callback writes the refresh token to the protected path configured by `GOOGLE_OAUTH_REFRESH_TOKEN_FILE`; never commit that file or the OAuth client secret. The OAuth client's authorized redirect URI must include `http://localhost:3000/api/auth/google/callback`.
+
+After authorization, clicking **Approve & Upload** creates or reuses a Product ID subfolder and creates or replaces the deterministic PNG. Without complete output-storage credentials, approval remains local and the app clearly reports that storage is not configured. The service account configuration remains available independently for the read-only prompt and reference assets used by CP-005.
 
 ## Generation API transport
 

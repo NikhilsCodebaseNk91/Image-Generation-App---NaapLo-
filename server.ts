@@ -7,6 +7,7 @@ import { generateRouter } from './server/routes/generate.ts';
 import { outputsRouter } from './server/routes/outputs.ts';
 import { getImageProviderConfiguration } from './server/services/imageProvider/index.ts';
 import { accessProtectionMiddleware, requestSecurityMiddleware } from './server/middleware/security.ts';
+import { isDriveOutputStorageConfigured } from './server/services/driveSource.ts';
 
 const PORT = Number.parseInt(process.env.PORT || '3000', 10);
 const app = express();
@@ -30,7 +31,7 @@ app.get('/api/health', (req, res) => {
     provider: providerConfiguration.provider,
     model: providerConfiguration.model,
     hasApiKey: providerConfiguration.hasApiKey,
-    outputStorageConfigured: Boolean(process.env.DRIVE_OUTPUT_FOLDER_ID?.trim()),
+    outputStorageConfigured: isDriveOutputStorageConfigured(),
   };
   res.json(response);
 });

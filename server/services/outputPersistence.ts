@@ -1,6 +1,6 @@
 import { buildOutputFileName, buildProductFolderName } from '../../shared/outputFileName.ts';
 import type { OutputType } from '../../shared/outputTypes.ts';
-import { getDriveAccessToken } from './driveSource.ts';
+import { getDriveOutputAccessToken } from './driveSource.ts';
 
 export interface StoredOutput {
   fileId: string;
@@ -14,7 +14,7 @@ const uploadBase = () => (process.env.DRIVE_UPLOAD_API_BASE_URL || 'https://www.
 const q = (value: string) => value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
 async function driveJson<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const token = await getDriveAccessToken();
+  const token = await getDriveOutputAccessToken();
   const response = await fetch(url, { ...init, headers: { authorization: `Bearer ${token}`, ...init.headers } });
   if (!response.ok) throw new Error(`Drive output request failed with HTTP ${response.status}.`);
   return await response.json() as T;
