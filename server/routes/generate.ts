@@ -7,6 +7,7 @@ import { getImageProvider } from '../services/imageProvider/index.ts';
 import { generationRateLimitMiddleware } from '../middleware/security.ts';
 import { applyNaapLoBranding, normalizeGeneratedImageToPng, requiresNaapLoBranding } from '../services/branding.ts';
 import { buildOutputFileName } from '../../shared/outputFileName.ts';
+import { ImageProviderError } from '../services/imageProvider/errors.ts';
 
 export const generateRouter = Router();
 
@@ -201,9 +202,13 @@ generateRouter.post('/generate', generationRateLimitMiddleware, async (req: Requ
   } catch (err: unknown) {
     console.error(JSON.stringify({ event: 'generation_error', requestId: res.locals.requestId }));
 
+    const publicMessage = err instanceof ImageProviderError
+      ? err.message
+      : 'Image generation failed. Please retry or contact the administrator.';
+
     res.status(500).json({
       success: false,
-      error: 'Image generation failed. Please retry or contact the administrator.',
+      error: publicMessage,
     } satisfies GenerateApiResponse);
   }
 });

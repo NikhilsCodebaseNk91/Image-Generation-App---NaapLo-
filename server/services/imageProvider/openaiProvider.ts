@@ -5,6 +5,7 @@ import type {
   ProviderGenerateResult,
 } from './types.ts';
 import { assemblePrompt } from '../promptAssembler.ts';
+import { ImageProviderError } from './errors.ts';
 
 const DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-2';
 const DEFAULT_TIMEOUT_MS = 180_000;
@@ -32,7 +33,7 @@ function requestedSize(aspectRatio?: string): '1024x1024' | '1024x1536' | '1536x
   return '1024x1536';
 }
 
-function normalizedOpenAIError(error: unknown): Error {
+function normalizedOpenAIError(error: unknown): ImageProviderError {
   const value = error as {
     status?: number;
     code?: string;
@@ -48,30 +49,30 @@ function normalizedOpenAIError(error: unknown): Error {
   const message = value?.message || '';
 
   if (status === 401 || code === 'invalid_api_key') {
-    return new Error('OpenAI authentication failed. Verify OPENAI_API_KEY in the server environment.');
+    return new ImageProviderError('OpenAI authentication failed. Verify OPENAI_API_KEY in the server environment.', code || 'authentication_failed');
   }
   if (status === 429 || code === 'rate_limit_exceeded') {
-    return new Error('OpenAI rate limit or quota was exceeded. Check API billing, limits, and retry later.');
+    return new ImageProviderError('OpenAI rate limit or quota was exceeded. Wait before retrying and check API billing or usage limits.', code || 'rate_limit_exceeded');
   }
   if (name.includes('Timeout') || code.includes('timeout')) {
-    return new Error('OpenAI image generation timed out. Please retry the request.');
+    return new ImageProviderError('OpenAI image generation timed out. Please retry the request.', code || 'timeout');
   }
   if (status === 400 && (code === 'moderation_blocked' || code === 'content_policy_violation')) {
-    return new Error('OpenAI could not generate this image because the request did not meet safety requirements. Revise the prompt or reference images.');
+    return new ImageProviderError('OpenAI could not generate this image because the request did not meet safety requirements. Revise the prompt or reference images.', code);
   }
   if (status === 400) {
-    return new Error('OpenAI rejected the image request. Check the selected model and uploaded image formats.');
+    return new ImageProviderError(`OpenAI rejected the image request${code ? ` (${code})` : ''}. Check the request inputs.`, code || 'invalid_request');
   }
   if (status === 403) {
-    return new Error('OpenAI denied access to the selected image model. Check project permissions and model access.');
+    return new ImageProviderError('OpenAI denied access to the selected image model. Check project permissions and model access.', code || 'access_denied');
   }
   if (status && status >= 500) {
-    return new Error('OpenAI image generation is temporarily unavailable. Please retry later.');
+    return new ImageProviderError('OpenAI image generation is temporarily unavailable. Please retry later.', code || 'provider_unavailable');
   }
   if (message.toLowerCase().includes('connection')) {
-    return new Error('Could not connect to OpenAI image generation. Check the server network and retry.');
+    return new ImageProviderError('Could not connect to OpenAI image generation. Check the server network and retry.', code || 'connection_failed');
   }
-  return new Error('OpenAI image generation failed unexpectedly. Please retry or check the server logs.');
+  return new ImageProviderError('OpenAI image generation failed unexpectedly. Please retry or check the server logs.', code || 'unexpected_provider_error');
 }
 
 function logOpenAIError(error: unknown): void {
@@ -101,7 +102,7 @@ export class OpenAIImageProvider implements ImageGenerationProvider {
   public async generateImage(request: ProviderGenerateRequest): Promise<ProviderGenerateResult> {
     const apiKey = process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) {
-      throw new Error(
+      throw new ImageProviderError(
         'OPENAI_API_KEY is not configured on the server. Add it to the server environment and restart the app.'
       );
     }
@@ -114,7 +115,7 @@ export class OpenAIImageProvider implements ImageGenerationProvider {
     const client = new OpenAI({ apiKey, timeout, maxRetries: 1 });
     const { directiveText } = assemblePrompt(request);
     if (directiveText.length > OPENAI_IMAGE_PROMPT_MAX_CHARS) {
-      throw new Error(
+      throw new ImageProviderError(
         `The compiled catalogue instructions exceed the OpenAI ${OPENAI_IMAGE_PROMPT_MAX_CHARS.toLocaleString()}-character image prompt limit.`
       );
     }
@@ -197,7 +198,7 @@ export class OpenAIImageProvider implements ImageGenerationProvider {
       };
     } catch (error: unknown) {
       if ((error as Error)?.message === 'OPENAI_NO_IMAGE') {
-        throw new Error('OpenAI completed the request but returned no image data. Please retry.');
+        throw new ImageProviderError('OpenAI completed the request but returned no image data. Please retry.', 'no_image_returned');
       }
       logOpenAIError(error);
       throw normalizedOpenAIError(error);
