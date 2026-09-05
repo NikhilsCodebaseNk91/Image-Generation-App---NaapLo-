@@ -8,6 +8,7 @@ import { assemblePrompt } from '../promptAssembler.ts';
 
 const DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-2';
 const DEFAULT_TIMEOUT_MS = 180_000;
+const OPENAI_IMAGE_PROMPT_MAX_CHARS = 32_000;
 
 function cleanBase64(dataUrlOrBase64: string): string {
   const marker = ';base64,';
@@ -35,8 +36,11 @@ function normalizedOpenAIError(error: unknown): Error {
   const value = error as {
     status?: number;
     code?: string;
+    param?: string;
+    type?: string;
     name?: string;
     message?: string;
+    requestID?: string;
   };
   const status = value?.status;
   const code = value?.code || '';
@@ -70,6 +74,27 @@ function normalizedOpenAIError(error: unknown): Error {
   return new Error('OpenAI image generation failed unexpectedly. Please retry or check the server logs.');
 }
 
+function logOpenAIError(error: unknown): void {
+  const value = error as {
+    status?: number;
+    code?: string;
+    param?: string;
+    type?: string;
+    name?: string;
+    requestID?: string;
+  };
+
+  console.error(JSON.stringify({
+    event: 'openai_image_error',
+    status: value?.status,
+    code: value?.code,
+    param: value?.param,
+    type: value?.type,
+    name: value?.name,
+    requestId: value?.requestID,
+  }));
+}
+
 export class OpenAIImageProvider implements ImageGenerationProvider {
   public readonly name = 'openai';
 
@@ -88,6 +113,11 @@ export class OpenAIImageProvider implements ImageGenerationProvider {
       : DEFAULT_TIMEOUT_MS;
     const client = new OpenAI({ apiKey, timeout, maxRetries: 1 });
     const { directiveText } = assemblePrompt(request);
+    if (directiveText.length > OPENAI_IMAGE_PROMPT_MAX_CHARS) {
+      throw new Error(
+        `The compiled catalogue instructions exceed the OpenAI ${OPENAI_IMAGE_PROMPT_MAX_CHARS.toLocaleString()}-character image prompt limit.`
+      );
+    }
     const inputs: Array<{ data: string; mimeType: string; name: string }> = [];
 
     request.referenceImages.forEach((image, index) => {
@@ -169,8 +199,8 @@ export class OpenAIImageProvider implements ImageGenerationProvider {
       if ((error as Error)?.message === 'OPENAI_NO_IMAGE') {
         throw new Error('OpenAI completed the request but returned no image data. Please retry.');
       }
+      logOpenAIError(error);
       throw normalizedOpenAIError(error);
     }
   }
 }
-

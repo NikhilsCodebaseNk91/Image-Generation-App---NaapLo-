@@ -5,6 +5,88 @@ export interface AssembledPromptPayload {
   directiveText: string;
 }
 
+const BASE_MASTER_SECTIONS = ['1', '2', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+
+const VIEW_SUBSECTIONS: Partial<Record<ProviderGenerateRequest['outputType'], { blouse: string; other: string[] }>> = {
+  'FRONT VIEW': { blouse: '13.1', other: ['14.1', '14.5'] },
+  'BACK VIEW': { blouse: '13.2', other: ['14.2', '14.5'] },
+  'SIDE VIEW': { blouse: '13.3', other: ['14.3', '14.5'] },
+  'FULL VIEW': { blouse: '13.4', other: ['14.4', '14.5'] },
+  'MULTIPLE OUTFIT VIEW': { blouse: '13.5', other: ['14.5', '14.6'] },
+};
+
+function splitByHeading(document: string, level: 2 | 3): Map<string, string> {
+  const marker = '#'.repeat(level);
+  const pattern = new RegExp(`^${marker}\\s+(\\d+(?:\\.\\d+)?)\\.?.*$`, 'gm');
+  const matches = [...document.matchAll(pattern)];
+  const sections = new Map<string, string>();
+
+  matches.forEach((match, index) => {
+    const start = match.index ?? 0;
+    const end = matches[index + 1]?.index ?? document.length;
+    sections.set(match[1], document.slice(start, end).trim());
+  });
+
+  return sections;
+}
+
+/**
+ * The Image API accepts at most 32,000 prompt characters. The approved control
+ * document is larger because it contains rules for every output type. Compile it
+ * by selecting its unchanged global rules and only the view-specific sections
+ * needed for the current job; no garment rule is rewritten or duplicated here.
+ */
+export function compileMasterPromptForOutput(
+  masterPrompt: string,
+  outputType: ProviderGenerateRequest['outputType']
+): string {
+  const h2Sections = splitByHeading(masterPrompt, 2);
+  const selected: string[] = [];
+  const preambleEnd = masterPrompt.search(/^##\s+/m);
+  if (preambleEnd > 0) selected.push(masterPrompt.slice(0, preambleEnd).trim());
+
+  for (const sectionNumber of BASE_MASTER_SECTIONS) {
+    const section = h2Sections.get(sectionNumber);
+    if (section) selected.push(section);
+  }
+
+  const viewSections = VIEW_SUBSECTIONS[outputType];
+  if (viewSections) {
+    const blouseRules = h2Sections.get('13');
+    const otherRules = h2Sections.get('14');
+    const blouseSubsections = blouseRules ? splitByHeading(blouseRules, 3) : new Map<string, string>();
+    const otherSubsections = otherRules ? splitByHeading(otherRules, 3) : new Map<string, string>();
+
+    const selectedBlouse = blouseSubsections.get(viewSections.blouse);
+    if (selectedBlouse) selected.push('## 13. BLOUSE VIEW RULES\n\n' + selectedBlouse);
+
+    const selectedOther = viewSections.other
+      .map((number) => otherSubsections.get(number))
+      .filter((section): section is string => Boolean(section));
+    if (selectedOther.length > 0) {
+      selected.push('## 14. SINGLE-KURTA AND OTHER NON-BLOUSE VIEW RULES\n\n' + selectedOther.join('\n\n'));
+    }
+  }
+
+  const specializedSections: Partial<Record<ProviderGenerateRequest['outputType'], string[]>> = {
+    'UNSTITCHED DISPLAY VIEW': ['15'],
+    'CLOSE-UP': ['16'],
+    'SPECIAL POSE': ['17', '18'],
+    'DESCRIPTIVE CATALOGUE POSTER': ['19'],
+  };
+  for (const sectionNumber of specializedSections[outputType] ?? []) {
+    const section = h2Sections.get(sectionNumber);
+    if (section) selected.push(section);
+  }
+
+  for (const sectionNumber of ['20', '21']) {
+    const section = h2Sections.get(sectionNumber);
+    if (section) selected.push(section);
+  }
+
+  return selected.join('\n\n').trim();
+}
+
 /**
  * Assembles the application-level instructions without duplicating garment domain rules.
  * The garment rules are provided in the masterPrompt. This orchestrator combines the master prompt,
@@ -28,7 +110,7 @@ export function assemblePrompt(request: ProviderGenerateRequest): AssembledPromp
   const sections: string[] = [];
 
   // 1. Master Prompt inclusion (domain-specific garment rules)
-  sections.push(masterPrompt);
+  sections.push(compileMasterPromptForOutput(masterPrompt, outputType));
 
   // 2. Production Job Header
   sections.push(`
