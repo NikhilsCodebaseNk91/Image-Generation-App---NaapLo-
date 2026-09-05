@@ -1,4 +1,5 @@
 import OpenAI, { toFile } from 'openai';
+import sharp from 'sharp';
 import type {
   ImageGenerationProvider,
   ProviderGenerateRequest,
@@ -10,6 +11,8 @@ import { ImageProviderError } from './errors.ts';
 const DEFAULT_OPENAI_IMAGE_MODEL = 'gpt-image-2';
 const DEFAULT_TIMEOUT_MS = 180_000;
 const OPENAI_IMAGE_PROMPT_MAX_CHARS = 32_000;
+const OPENAI_INPUT_MAX_EDGE = 2_048;
+const MAX_DECODED_INPUT_PIXELS = 40_000_000;
 
 function cleanBase64(dataUrlOrBase64: string): string {
   const marker = ';base64,';
@@ -19,18 +22,37 @@ function cleanBase64(dataUrlOrBase64: string): string {
     : dataUrlOrBase64;
 }
 
-function fileExtension(mimeType: string): string {
-  if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') return 'jpg';
-  if (mimeType === 'image/webp') return 'webp';
-  return 'png';
-}
-
 function requestedSize(aspectRatio?: string): '1024x1024' | '1024x1536' | '1536x1024' {
   if (aspectRatio === '1:1') return '1024x1024';
   if (aspectRatio === '4:3' || aspectRatio === '3:2' || aspectRatio === '16:9') {
     return '1536x1024';
   }
   return '1024x1536';
+}
+
+async function normalizeOpenAIInput(input: { data: string; name: string }): Promise<Buffer> {
+  const source = Buffer.from(cleanBase64(input.data), 'base64');
+
+  try {
+    return await sharp(source, {
+      failOn: 'error',
+      limitInputPixels: MAX_DECODED_INPUT_PIXELS,
+    })
+      .rotate()
+      .resize({
+        width: OPENAI_INPUT_MAX_EDGE,
+        height: OPENAI_INPUT_MAX_EDGE,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .png({ compressionLevel: 6 })
+      .toBuffer();
+  } catch {
+    throw new ImageProviderError(
+      `The uploaded image "${input.name}" could not be decoded. Re-export it as a standard JPG or PNG and upload it again.`,
+      'invalid_image_file'
+    );
+  }
 }
 
 function normalizedOpenAIError(error: unknown): ImageProviderError {
@@ -162,13 +184,13 @@ export class OpenAIImageProvider implements ImageGenerationProvider {
     }
 
     const uploadFiles = await Promise.all(
-      inputs.map((input, index) => {
-        const extension = fileExtension(input.mimeType);
+      inputs.map(async (input, index) => {
         const safeName = input.name.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '');
+        const normalized = await normalizeOpenAIInput(input);
         return toFile(
-          Buffer.from(cleanBase64(input.data), 'base64'),
-          `${safeName || `reference-${index + 1}`}.${extension}`,
-          { type: input.mimeType }
+          normalized,
+          `${safeName || `reference-${index + 1}`}.png`,
+          { type: 'image/png' }
         );
       })
     );
