@@ -21,6 +21,7 @@ generateRouter.post('/generate', async (req: Request, res: Response) => {
     const correction = typeof body.correction === 'string' ? body.correction.trim() : '';
     const referenceImages = Array.isArray(body.referenceImages) ? body.referenceImages : [];
     const currentGeneratedImage = body.currentGeneratedImage;
+    const identityReference = body.identityReference;
 
     // 1. Validate application contract and product identity
     if (body.contractVersion !== 'generation-job.v1') {
@@ -136,6 +137,7 @@ generateRouter.post('/generate', async (req: Request, res: Response) => {
       correction: correction || undefined,
       referenceImages,
       currentGeneratedImage,
+      identityReference,
       systemAssets,
       aspectRatio: '3:4', // Portrait catalogue aspect ratio supported by Gemini
       requestedQuality: 'ultra',

@@ -8,50 +8,71 @@ import {
 import { Target, Info } from 'lucide-react';
 
 interface OutputTypeSelectorProps {
-  selectedType: OutputType;
-  onSelectType: (type: OutputType) => void;
+  selectedTypes: OutputType[];
+  onChange: (types: OutputType[]) => void;
   closeUpTarget: string;
   onChangeCloseUpTarget: (target: string) => void;
   disabled?: boolean;
 }
 
 export const OutputTypeSelector: React.FC<OutputTypeSelectorProps> = ({
-  selectedType,
-  onSelectType,
+  selectedTypes,
+  onChange,
   closeUpTarget,
   onChangeCloseUpTarget,
   disabled = false,
 }) => {
-  const currentConfig = OUTPUT_TYPE_CONFIGS[selectedType];
-  const isCloseUp = selectedType === 'CLOSE-UP';
+  const isCloseUp = selectedTypes.includes('CLOSE-UP');
+
+  const toggleType = (type: OutputType) => {
+    if (selectedTypes.includes(type)) {
+      if (type === 'FRONT VIEW' && selectedTypes.some((item) => item === 'BACK VIEW' || item === 'SIDE VIEW')) return;
+      if (selectedTypes.length > 1) onChange(selectedTypes.filter((item) => item !== type));
+      return;
+    }
+
+    const additions: OutputType[] = [];
+    if ((type === 'BACK VIEW' || type === 'SIDE VIEW') && !selectedTypes.includes('FRONT VIEW')) {
+      additions.push('FRONT VIEW');
+    }
+    additions.push(type);
+    if (selectedTypes.length + additions.length <= 4) onChange([...selectedTypes, ...additions]);
+  };
 
   return (
     <div className="space-y-4">
-      {/* Output Type Dropdown */}
+      {/* Multi-output view selector */}
       <div className="space-y-1.5">
-        <label htmlFor="output-type-select" className="block text-sm font-medium text-stone-800">
-          Requested Output View <span className="text-red-500">*</span>
-        </label>
-        <select
-          id="output-type-select"
-          value={selectedType}
-          disabled={disabled}
-          onChange={(e) => onSelectType(e.target.value as OutputType)}
-          className="w-full rounded-md border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-stone-900 shadow-xs focus:border-stone-900 focus:outline-hidden focus:ring-1 focus:ring-stone-900 disabled:opacity-50 font-medium"
-        >
-          {OUTPUT_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {type}
-            </option>
-          ))}
-        </select>
-
-        {currentConfig && (
-          <p className="text-xs text-stone-500 flex items-start gap-1.5 pt-1">
-            <Info className="w-3.5 h-3.5 text-stone-400 mt-0.5 shrink-0" />
-            <span>{currentConfig.description}</span>
-          </p>
-        )}
+        <div className="flex items-center justify-between">
+          <label className="block text-sm font-medium text-stone-800">
+            Requested Output Views <span className="text-red-500">*</span>
+          </label>
+          <span className="text-xs text-stone-500">{selectedTypes.length}/4 selected</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="group" aria-label="Requested output views">
+          {OUTPUT_TYPES.map((type) => {
+            const selected = selectedTypes.includes(type);
+            return (
+              <button
+                key={type}
+                type="button"
+                disabled={disabled || (!selected && selectedTypes.length >= 4)}
+                aria-pressed={selected}
+                onClick={() => toggleType(type)}
+                className={`rounded-md border px-3 py-2 text-left transition-colors disabled:opacity-40 ${selected ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-300 bg-white text-stone-700 hover:border-stone-500'}`}
+              >
+                <span className="block text-xs font-semibold">{type}</span>
+                <span className={`block text-[10px] mt-0.5 ${selected ? 'text-stone-300' : 'text-stone-500'}`}>
+                  {OUTPUT_TYPE_CONFIGS[type].description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-stone-500 flex items-start gap-1.5 pt-1">
+          <Info className="w-3.5 h-3.5 text-stone-400 mt-0.5 shrink-0" />
+          <span>Each selected view runs as an independent job. BACK or SIDE automatically includes FRONT for identity continuity.</span>
+        </p>
       </div>
 
       {/* Conditional CLOSE-UP TARGET input */}

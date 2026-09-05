@@ -5,13 +5,19 @@ import type { GenerateApiResponse } from '../../shared/types.ts';
 interface GeneratedImageViewerProps {
   result: GenerateApiResponse;
   onApplyCorrection: (correctionText: string) => void;
+  onRegenerate: () => void;
   isCorrecting?: boolean;
+  identityUsed?: boolean;
+  error?: string;
 }
 
 export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
   result,
   onApplyCorrection,
+  onRegenerate,
   isCorrecting = false,
+  identityUsed = false,
+  error,
 }) => {
   const [correctionText, setCorrectionText] = useState('');
   const [isZoomed, setIsZoomed] = useState(false);
@@ -53,6 +59,11 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
                 {result.outputType}
               </span>
             )}
+            {identityUsed && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                FRONT identity linked
+              </span>
+            )}
           </div>
           {result.productId && (
             <p className="text-xs text-stone-500 mt-1">
@@ -71,7 +82,15 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
 
           <button
             type="button"
-            id="download-catalogue-image-btn"
+            onClick={onRegenerate}
+            disabled={isCorrecting}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 text-sm font-medium disabled:opacity-40"
+          >
+            <RefreshCw className={`w-4 h-4 ${isCorrecting ? 'animate-spin' : ''}`} />
+            Regenerate
+          </button>
+          <button
+            type="button"
             onClick={handleDownload}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-stone-900 text-white hover:bg-stone-800 text-sm font-medium transition-colors shadow-xs"
           >
@@ -82,9 +101,14 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
       </div>
 
       {/* Main Image Display */}
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+          The latest update failed: {error}. The previous successful image has been preserved.
+        </div>
+      )}
+
       <div className="relative group rounded-md border border-stone-200 bg-stone-50/50 flex items-center justify-center overflow-hidden">
         <img
-          id="generated-catalogue-image"
           src={dataUrl}
           alt={`NaapLo Catalogue - ${result.outputType || 'Generated image'}`}
           className="w-full max-h-[640px] object-contain cursor-zoom-in transition-transform duration-200"
@@ -116,7 +140,6 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
 
         <form onSubmit={handleSubmitCorrection} className="space-y-3">
           <textarea
-            id="correction-textarea"
             rows={3}
             value={correctionText}
             disabled={isCorrecting}
@@ -132,7 +155,6 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
 
             <button
               type="submit"
-              id="apply-correction-btn"
               disabled={!correctionText.trim() || isCorrecting}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-stone-800 text-white hover:bg-stone-700 text-sm font-medium transition-colors shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
             >

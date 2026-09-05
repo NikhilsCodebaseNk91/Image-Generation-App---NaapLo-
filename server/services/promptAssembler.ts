@@ -16,12 +16,14 @@ export function assemblePrompt(request: ProviderGenerateRequest): AssembledPromp
     closeUpTarget,
     correction,
     currentGeneratedImage,
+    identityReference,
     masterPrompt,
     productId,
   } = request;
 
   const typeConfig = OUTPUT_TYPE_CONFIGS[outputType];
   const isCorrection = Boolean(correction && currentGeneratedImage);
+  const hasIdentityReference = Boolean(identityReference);
 
   const sections: string[] = [];
 
@@ -95,6 +97,18 @@ INSTRUCTIONS FOR CORRECTION:
 `);
   }
 
+  if (hasIdentityReference) {
+    sections.push(`
+==================================================
+IDENTITY CONTINUITY DIRECTIVE
+==================================================
+A successful FRONT catalogue output is attached as the IDENTITY REFERENCE.
+- Preserve the same adult model identity, face, hair, skin tone, proportions, and overall styling in this requested view.
+- Use it only for person and presentation continuity; do not copy garment construction from it.
+- The original GARMENT REFERENCE IMAGES remain the absolute truth for garment colors, cut, embroidery, fabric, and details.
+`);
+  }
+
   // 7. Input Roles Summary
   sections.push(`
 ==================================================
@@ -102,6 +116,7 @@ MULTIMODAL INPUTS SUMMARY
 ==================================================
 - The first set of attached images are the GARMENT REFERENCE IMAGES. These are the absolute physical ground truth for all colors, embroidery, silhouette, cuts, and fabrics.
 ${isCorrection ? '- One of the attached images is the CURRENT GENERATED DRAFT, which must be corrected according to the instruction above.' : ''}
+${hasIdentityReference ? '- One of the attached images is the FRONT IDENTITY REFERENCE. It controls model/person continuity only; it is not garment-truth authority.' : ''}
 ${outputType === 'MULTIPLE OUTFIT VIEW' ? '- One of the attached images is the SYSTEM COMPOSITION LAYOUT REFERENCE for pose arrangement.' : ''}
 ${outputType === 'DESCRIPTIVE CATALOGUE POSTER' ? '- One of the attached images is the NAAPLO LOGO for brand placement.' : ''}
 

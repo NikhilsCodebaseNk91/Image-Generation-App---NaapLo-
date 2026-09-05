@@ -1,6 +1,12 @@
-# NaapLo Catalogue Generator — Future Development Roadmap
+# NaapLo Catalogue Generator — Development Roadmap
 
-> **IMPORTANT:** This roadmap documents future strategic enhancements. **Do NOT implement these features during Phase 1.** Phase 1 is strictly confined to the minimal working vertical slice.
+## Phase 1 / CP-004: Multi-Output Production — Completed
+
+- Select one to four output views in one run.
+- Execute one provider request per view, sequentially.
+- Preserve independent result, failure, retry, correction, and download controls per view.
+- Generate FRONT first and use its successful output as the model/person identity reference for BACK and SIDE; original product photographs remain garment truth.
+- Verified with a four-view isolated-failure browser test and real FRONT/BACK/SIDE OpenAI generations.
 
 ---
 
@@ -8,8 +14,8 @@
 *Estimated Scope:*
 - **Google Drive-Backed Master Prompt:** Dynamic loading of the live master prompt from a designated Google Drive document, falling back automatically to local `config/master-prompt.md`.
 - **Cloud-Hosted Permanent System Assets:** Syncing `NaapLo Logo.png` and `Reference Image for MULTIPLE OUTFIT VIEW.png` from cloud storage.
-- **Accepted FRONT Image as Identity Reference:** Once a client approves the initial `FRONT VIEW`, the system locks that model's face, posture, and lighting as the identity anchor for subsequent views (`BACK VIEW`, `SIDE VIEW`, `FULL VIEW`).
-- **Enhanced Continuity Engine:** Ensuring exact fabric and drape alignment across multi-angle job series.
+- **Explicit Identity Approval:** Optional operator approval/replacement of the automatically selected FRONT identity anchor.
+- **Enhanced Continuity Engine:** Stronger fabric and drape alignment beyond the CP-004 FRONT-led continuity baseline.
 - **Model Quality & Tier Selector:** User selection between fast turnaround and ultra-resolution modes.
 - **Stronger Validation:** Client-side image dimensions, aspect ratios, and blur detection before submission.
 
@@ -31,7 +37,6 @@
 - **Approved Image State Machine:** Operators can mark images as "Approved", "Draft", or "Archived".
 - **Automatic Product ID Naming & Categorization:** Intelligent naming rules based on season, garment type, and colorway.
 - **Google Drive Automation:** Automatic discovery or creation of product folders on Drive with automated direct uploads upon image approval.
-- **Multi-Output Job Sequencing:** Automated generation pipeline allowing a user to generate FRONT, BACK, SIDE, and CLOSE-UP sequentially in one batch job.
 - **Zip / Download All:** One-click packaging of all generated views for a product SKU.
 
 ---

@@ -15,6 +15,8 @@ export interface GenerateApiRequest {
   correction?: string;
   referenceImages: ImageFilePayload[];
   currentGeneratedImage?: ImageFilePayload;
+  /** Successful FRONT output used only for model/person continuity across sibling views. */
+  identityReference?: ImageFilePayload;
 }
 
 export interface GenerateApiResponse {
