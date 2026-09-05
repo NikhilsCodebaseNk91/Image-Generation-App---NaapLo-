@@ -5,13 +5,20 @@ import { OUTPUT_TYPES, OUTPUT_TYPE_CONFIGS } from './shared/outputTypes.ts';
 import type { HealthCheckResponse } from './shared/types.ts';
 import { generateRouter } from './server/routes/generate.ts';
 import { getImageProviderConfiguration } from './server/services/imageProvider/index.ts';
+import { accessProtectionMiddleware, requestSecurityMiddleware } from './server/middleware/security.ts';
 
 const PORT = Number.parseInt(process.env.PORT || '3000', 10);
 const app = express();
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '45mb';
+
+app.disable('x-powered-by');
+if (process.env.TRUST_PROXY?.trim().toLowerCase() === 'true') app.set('trust proxy', 1);
+app.use(requestSecurityMiddleware);
+app.use(accessProtectionMiddleware);
 
 // Enable JSON body parsing with sufficient limit for multiple high-res garment photos
-app.use(express.json({ limit: '60mb' }));
-app.use(express.urlencoded({ extended: true, limit: '60mb' }));
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
 
 // Health Check endpoint
 app.get('/api/health', (req, res) => {
@@ -36,6 +43,16 @@ app.get('/api/output-types', (req, res) => {
 
 // Image Generation & Correction API
 app.use('/api', generateRouter);
+
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const status = typeof err === 'object' && err && 'status' in err ? Number((err as { status?: number }).status) : 500;
+  if (status === 413) {
+    res.status(413).json({ success: false, error: `Request body is too large. Maximum accepted body size is ${JSON_BODY_LIMIT}.` });
+    return;
+  }
+  console.error(JSON.stringify({ event: 'http_error', requestId: res.locals.requestId, status: 500 }));
+  res.status(500).json({ success: false, error: 'The server could not process this request.' });
+});
 
 // Setup Vite middleware in development, or serve compiled static files in production
 async function startServer() {

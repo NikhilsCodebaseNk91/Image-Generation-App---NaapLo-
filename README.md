@@ -58,6 +58,10 @@ For local development, keep the key in a protected folder and set `GOOGLE_SERVIC
 
 The file IDs and minimum approved prompt version are documented in `.env.example`. If Drive cannot be authenticated or validated, the application automatically uses the registered local prompt and assets.
 
+### Production access protection
+
+Before exposing the app to the internet, set `ACCESS_PROTECTION_ENABLED=true` with a strong `APP_ACCESS_USERNAME` and `APP_ACCESS_PASSWORD`. CP-007 also applies an in-memory per-IP generation rate limit, request-body limits, per-image and combined-image limits, security headers, and request-ID logs that exclude uploaded images, credentials, prompts, and Product IDs.
+
 ## Generation API transport
 
 `POST /api/generate` uses JSON with base64-encoded image payloads (`Content-Type: application/json`).
