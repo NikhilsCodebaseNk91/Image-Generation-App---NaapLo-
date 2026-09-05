@@ -81,6 +81,8 @@ export class BatchQueueService {
     if (request.contractVersion !== 'batch-catalogue.v1') throw new BatchContractError('Expected batch-catalogue.v1.');
     const productId = request.productId?.trim();
     if (!productId || productId.length > 120) throw new BatchContractError('Each catalogue requires a valid Product ID.');
+    const operatorTag = request.operatorTag?.trim();
+    if (operatorTag && operatorTag.length > 80) throw new BatchContractError('Operator Tag must be 80 characters or fewer.');
     const existing = await Promise.all(batch.catalogueIds.map((id) => this.store.loadCatalogue(batch.id, id)));
     if (existing.some((item) => item.productId.toLowerCase() === productId.toLowerCase())) throw new BatchContractError(`Product ID ${productId} is duplicated in this batch.`);
     let outputTypes = this.validateOutputTypes(request.outputTypes);
@@ -91,6 +93,7 @@ export class BatchQueueService {
     const ordered = [...outputTypes].sort((a, b) => a === 'FRONT VIEW' ? -1 : b === 'FRONT VIEW' ? 1 : OUTPUT_TYPES.indexOf(a) - OUTPUT_TYPES.indexOf(b));
     const catalogue = await this.store.createCatalogue(batch.id, {
       productId,
+      operatorTag: operatorTag || undefined,
       quality: request.quality,
       outputTypes: ordered,
       closeUpTarget: request.closeUpTarget?.trim() || undefined,
@@ -372,7 +375,7 @@ export class BatchQueueService {
       : statuses.some((value) => value === 'SUCCESS' || value === 'FAILED') ? 'REVIEW_REQUIRED'
       : statuses.some((value) => value === 'CANCELLED' || value === 'FAILED') ? 'COMPLETED_WITH_FAILURES' : 'READY';
     return {
-      id: catalogue.id, productId: catalogue.productId, quality: catalogue.quality, outputTypes: catalogue.outputTypes,
+      id: catalogue.id, productId: catalogue.productId, operatorTag: catalogue.operatorTag, quality: catalogue.quality, outputTypes: catalogue.outputTypes,
       closeUpTarget: catalogue.closeUpTarget, instructions: catalogue.instructions, referenceCount: catalogue.referenceImages.length,
       status, views: catalogue.views.map((view): BatchViewSummary => ({
         outputType: view.outputType, status: view.status, attempts: view.attempts, error: view.error, startedAt: view.startedAt,

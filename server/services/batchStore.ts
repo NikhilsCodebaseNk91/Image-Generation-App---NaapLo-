@@ -27,6 +27,7 @@ export interface StoredCatalogue {
   id: string;
   batchId: string;
   productId: string;
+  operatorTag?: string;
   quality: BatchQuality;
   outputTypes: OutputType[];
   closeUpTarget?: string;

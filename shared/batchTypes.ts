@@ -36,6 +36,8 @@ export interface CreateCatalogueBatchRequest {
 export interface AddBatchCatalogueRequest {
   contractVersion: 'batch-catalogue.v1';
   productId: string;
+  /** Optional operator-only metadata used to identify the catalogue's source or group. */
+  operatorTag?: string;
   outputTypes: OutputType[];
   closeUpTarget?: string;
   instructions?: string;
@@ -61,6 +63,7 @@ export interface BatchViewSummary {
 export interface BatchCatalogueSummary {
   id: string;
   productId: string;
+  operatorTag?: string;
   quality: BatchQuality;
   outputTypes: OutputType[];
   closeUpTarget?: string;

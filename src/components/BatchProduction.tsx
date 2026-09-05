@@ -9,6 +9,7 @@ import { OutputTypeSelector } from './OutputTypeSelector.tsx';
 interface DraftCard {
   key: number;
   productId: string;
+  operatorTag: string;
   referenceImages: ImageFilePayload[];
   outputTypes: OutputType[];
   closeUpTarget: string;
@@ -16,7 +17,7 @@ interface DraftCard {
   quality: BatchQuality;
 }
 
-const newCard = (key: number, outputTypes: OutputType[], quality: BatchQuality): DraftCard => ({ key, productId: '', referenceImages: [], outputTypes: [...outputTypes], closeUpTarget: '', instructions: '', quality });
+const newCard = (key: number, outputTypes: OutputType[], quality: BatchQuality, closeUpTarget = ''): DraftCard => ({ key, productId: '', operatorTag: '', referenceImages: [], outputTypes: [...outputTypes], closeUpTarget, instructions: '', quality });
 const encodedType = (type: OutputType) => encodeURIComponent(type);
 const terminalBatch = new Set(['COMPLETED', 'COMPLETED_WITH_FAILURES', 'CANCELLED', 'FAILED']);
 
@@ -43,6 +44,7 @@ export function BatchProduction() {
   const [count, setCount] = useState(3);
   const [defaultViews, setDefaultViews] = useState<OutputType[]>(['FRONT VIEW']);
   const [defaultQuality, setDefaultQuality] = useState<BatchQuality>('draft');
+  const [defaultCloseUpTarget, setDefaultCloseUpTarget] = useState('');
   const [cards, setCards] = useState<DraftCard[]>(() => Array.from({ length: 3 }, (_, index) => newCard(index, ['FRONT VIEW'], 'draft')));
   const [expanded, setExpanded] = useState<number | null>(0);
   const [batch, setBatch] = useState<CatalogueBatchSummary | null>(null);
@@ -69,11 +71,11 @@ export function BatchProduction() {
   const updateCount = (next: number) => {
     const safe = Math.max(1, Math.min(30, next || 1));
     setCount(safe);
-    setCards((current) => Array.from({ length: safe }, (_, index) => current[index] || newCard(Date.now() + index, defaultViews, defaultQuality)));
+    setCards((current) => Array.from({ length: safe }, (_, index) => current[index] || newCard(Date.now() + index, defaultViews, defaultQuality, defaultCloseUpTarget)));
     if (expanded !== null && expanded >= safe) setExpanded(safe - 1);
   };
   const patchCard = (index: number, patch: Partial<DraftCard>) => setCards((current) => current.map((card, itemIndex) => itemIndex === index ? { ...card, ...patch } : card));
-  const applyDefaults = () => setCards((current) => current.map((card) => ({ ...card, outputTypes: [...defaultViews], quality: defaultQuality })));
+  const applyDefaults = () => setCards((current) => current.map((card) => ({ ...card, outputTypes: [...defaultViews], quality: defaultQuality, closeUpTarget: defaultViews.includes('CLOSE-UP') ? defaultCloseUpTarget : card.closeUpTarget })));
   const invalidCards = useMemo(() => cards.map((card) => !card.productId.trim() || card.referenceImages.length === 0 || card.outputTypes.length === 0 || (card.outputTypes.includes('CLOSE-UP') && !card.closeUpTarget.trim())), [cards]);
   const duplicateIds = new Set(cards.map((card) => card.productId.trim().toLowerCase()).filter((id, index, all) => id && all.indexOf(id) !== index));
   const ready = invalidCards.every((invalid) => !invalid) && duplicateIds.size === 0;
@@ -86,7 +88,7 @@ export function BatchProduction() {
       setBatch(created);
       let latest = created;
       for (const card of cards) {
-        const result = await api<{ batch: CatalogueBatchSummary }>(`/api/batches/${created.id}/catalogues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contractVersion: 'batch-catalogue.v1', productId: card.productId.trim(), outputTypes: card.outputTypes, closeUpTarget: card.closeUpTarget.trim() || undefined, instructions: card.instructions.trim() || undefined, quality: card.quality, referenceImages: card.referenceImages } satisfies AddBatchCatalogueRequest) });
+        const result = await api<{ batch: CatalogueBatchSummary }>(`/api/batches/${created.id}/catalogues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contractVersion: 'batch-catalogue.v1', productId: card.productId.trim(), operatorTag: card.operatorTag.trim() || undefined, outputTypes: card.outputTypes, closeUpTarget: card.closeUpTarget.trim() || undefined, instructions: card.instructions.trim() || undefined, quality: card.quality, referenceImages: card.referenceImages } satisfies AddBatchCatalogueRequest) });
         latest = result.batch;
         setBatch(latest);
       }
@@ -146,7 +148,7 @@ export function BatchProduction() {
         <div className="space-y-4">
           {batch.catalogues.map((catalogue, index) => (
             <section key={catalogue.id} className="rounded-lg border border-stone-200 bg-white p-5 shadow-xs">
-              <div className="flex items-center justify-between gap-3"><div><span className="text-xs text-stone-500">Catalogue {index + 1}</span><h3 className="font-mono font-semibold">{catalogue.productId}</h3></div><span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusTone(catalogue.status)}`}>{catalogue.status.replaceAll('_', ' ')}</span></div>
+              <div className="flex items-center justify-between gap-3"><div><span className="text-xs text-stone-500">Catalogue {index + 1}</span><div className="flex flex-wrap items-center gap-2"><h3 className="font-mono font-semibold">{catalogue.productId}</h3>{catalogue.operatorTag && <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-800">{catalogue.operatorTag}</span>}</div></div><span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusTone(catalogue.status)}`}>{catalogue.status.replaceAll('_', ' ')}</span></div>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 {catalogue.views.map((view) => (
                   <div key={view.outputType} className="rounded-md border border-stone-200 p-3">
@@ -192,7 +194,7 @@ export function BatchProduction() {
           <div><label className="block text-sm font-medium">Default quality</label><select value={defaultQuality} onChange={(event) => setDefaultQuality(event.target.value as BatchQuality)} className="mt-1 rounded-md border px-3 py-2"><option value="draft">Draft · faster</option><option value="final">Final · highest detail</option></select></div>
           <button onClick={applyDefaults} className="rounded-md border px-3 py-2 text-sm">Apply defaults to all cards</button>
         </div>
-        <div className="mt-4"><OutputTypeSelector selectedTypes={defaultViews} onChange={setDefaultViews} closeUpTarget="" onChangeCloseUpTarget={() => undefined} /></div>
+        <div className="mt-4"><OutputTypeSelector selectedTypes={defaultViews} onChange={setDefaultViews} closeUpTarget={defaultCloseUpTarget} onChangeCloseUpTarget={setDefaultCloseUpTarget} /></div>
         <p className="mt-3 flex items-center gap-2 text-xs text-stone-500"><Clock3 className="h-4 w-4" />Two catalogue views run concurrently. BACK and SIDE wait for that catalogue’s FRONT identity.</p>
       </section>
 
@@ -203,9 +205,9 @@ export function BatchProduction() {
           const duplicate = duplicateIds.has(card.productId.trim().toLowerCase());
           return (
             <section key={card.key} className={`rounded-lg border bg-white shadow-xs ${invalidCards[index] || duplicate ? 'border-amber-200' : 'border-emerald-200'}`}>
-              <button type="button" onClick={() => setExpanded(isOpen ? null : index)} className="flex w-full items-center justify-between gap-3 p-4 text-left"><div><span className="text-xs text-stone-500">Catalogue {index + 1}</span><p className="font-medium">{card.productId || 'Product ID not entered'} · {card.referenceImages.length} reference{card.referenceImages.length === 1 ? '' : 's'}</p></div>{isOpen ? <ChevronUp /> : <ChevronDown />}</button>
+              <button type="button" onClick={() => setExpanded(isOpen ? null : index)} className="flex w-full items-center justify-between gap-3 p-4 text-left"><div><span className="text-xs text-stone-500">Catalogue {index + 1}</span><p className="font-medium">{card.productId || 'Product ID not entered'}{card.operatorTag.trim() ? ` · ${card.operatorTag.trim()}` : ''} · {card.referenceImages.length} reference{card.referenceImages.length === 1 ? '' : 's'}</p></div>{isOpen ? <ChevronUp /> : <ChevronDown />}</button>
               {isOpen && <div className="space-y-5 border-t border-stone-100 p-4">
-                <div><label className="block text-sm font-medium">Product ID</label><input value={card.productId} onChange={(event) => patchCard(index, { productId: event.target.value })} className="mt-1 w-full rounded-md border px-3 py-2 font-mono" placeholder="NPL-2026-001" />{duplicate && <p className="mt-1 text-xs text-red-700">This Product ID is duplicated.</p>}</div>
+                <div className="grid gap-4 sm:grid-cols-[1fr_220px]"><div><label className="block text-sm font-medium">Product ID</label><input value={card.productId} onChange={(event) => patchCard(index, { productId: event.target.value })} className="mt-1 w-full rounded-md border px-3 py-2 font-mono" placeholder="NPL-2026-001" />{duplicate && <p className="mt-1 text-xs text-red-700">This Product ID is duplicated.</p>}</div><div><label className="block text-sm font-medium">Operator Tag <span className="font-normal text-stone-400">(optional)</span></label><input value={card.operatorTag} maxLength={80} onChange={(event) => patchCard(index, { operatorTag: event.target.value })} className="mt-1 w-full rounded-md border px-3 py-2 text-sm" placeholder="e.g., Jaipur shoot" /><p className="mt-1 text-[11px] text-stone-500">Identification only</p></div></div>
                 <ImageUploader images={card.referenceImages} onAddImages={(images) => patchCard(index, { referenceImages: [...card.referenceImages, ...images].slice(0, 10) })} onRemoveImage={(imageIndex) => patchCard(index, { referenceImages: card.referenceImages.filter((_, itemIndex) => itemIndex !== imageIndex) })} />
                 <OutputTypeSelector selectedTypes={card.outputTypes} onChange={(types) => patchCard(index, { outputTypes: types })} closeUpTarget={card.closeUpTarget} onChangeCloseUpTarget={(value) => patchCard(index, { closeUpTarget: value })} />
                 <div className="grid gap-4 sm:grid-cols-2"><div><label className="block text-sm font-medium">Quality</label><select value={card.quality} onChange={(event) => patchCard(index, { quality: event.target.value as BatchQuality })} className="mt-1 w-full rounded-md border px-3 py-2"><option value="draft">Draft · faster</option><option value="final">Final · highest detail</option></select></div><div><label className="block text-sm font-medium">Optional direction</label><input value={card.instructions} onChange={(event) => patchCard(index, { instructions: event.target.value })} className="mt-1 w-full rounded-md border px-3 py-2" placeholder="Background, styling, pose…" /></div></div>
