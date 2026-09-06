@@ -1,5 +1,5 @@
 import { OUTPUT_TYPES, type OutputType } from '../../shared/outputTypes.ts';
-import type { GenerateApiRequest, GenerateApiResponse } from '../../shared/types.ts';
+import type { GenerateApiRequest, GenerateApiResponse, ImageFilePayload } from '../../shared/types.ts';
 import { buildOutputFileName } from '../../shared/outputFileName.ts';
 import { applyNaapLoBranding, normalizeGeneratedImageToPng, requiresNaapLoBranding } from './branding.ts';
 import { getImageProvider } from './imageProvider/index.ts';
@@ -36,6 +36,18 @@ function invalid(message: string): never {
   throw new GenerationValidationError(message);
 }
 
+export function validateReferenceImageSet(referenceImages: ImageFilePayload[]): void {
+  if (referenceImages.length === 0) invalid('At least one garment reference photograph is required to generate a catalogue image.');
+  if (referenceImages.length > MAX_REFERENCE_IMAGES) invalid(`Maximum ${MAX_REFERENCE_IMAGES} reference photographs allowed per job. You provided ${referenceImages.length}.`);
+  let totalReferenceBytes = 0;
+  for (let index = 0; index < referenceImages.length; index += 1) {
+    const validationError = validateImage(referenceImages[index], `Reference image #${index + 1}`);
+    if (validationError) invalid(validationError);
+    totalReferenceBytes += imagePayloadBytes(referenceImages[index].data);
+  }
+  if (totalReferenceBytes > MAX_TOTAL_REFERENCE_BYTES) invalid(`Reference images exceed the ${Math.floor(MAX_TOTAL_REFERENCE_BYTES / 1024 / 1024)} MB combined limit.`);
+}
+
 export async function executeGenerationJob(
   body: Partial<GenerateApiRequest>,
   options: { requestedQuality?: ProviderGenerateRequest['requestedQuality'] } = {},
@@ -54,16 +66,7 @@ export async function executeGenerationJob(
   if (productId.length > 120 || closeUpTarget.length > 300 || correction.length > 2000 || additionalInstructions.length > 2000) invalid('One or more text fields exceed the accepted length limit.');
   if (!outputType) invalid('Output Type is required. Please select one of the approved catalogue views.');
   if (!OUTPUT_TYPES.includes(outputType)) invalid(`Invalid Output Type "${outputType}". Must be one of: ${OUTPUT_TYPES.join(', ')}`);
-  if (referenceImages.length === 0) invalid('At least one garment reference photograph is required to generate a catalogue image.');
-  if (referenceImages.length > MAX_REFERENCE_IMAGES) invalid(`Maximum ${MAX_REFERENCE_IMAGES} reference photographs allowed per job. You provided ${referenceImages.length}.`);
-
-  let totalReferenceBytes = 0;
-  for (let index = 0; index < referenceImages.length; index += 1) {
-    const validationError = validateImage(referenceImages[index], `Reference image #${index + 1}`);
-    if (validationError) invalid(validationError);
-    totalReferenceBytes += imagePayloadBytes(referenceImages[index].data);
-  }
-  if (totalReferenceBytes > MAX_TOTAL_REFERENCE_BYTES) invalid(`Reference images exceed the ${Math.floor(MAX_TOTAL_REFERENCE_BYTES / 1024 / 1024)} MB combined limit.`);
+  validateReferenceImageSet(referenceImages);
   for (const [label, image] of [['Current generated image', currentGeneratedImage], ['Identity reference', identityReference]] as const) {
     if (!image) continue;
     const validationError = validateImage(image, label);

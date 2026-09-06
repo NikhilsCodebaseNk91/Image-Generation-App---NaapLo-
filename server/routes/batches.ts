@@ -23,6 +23,7 @@ batchesRouter.post('/batches/:batchId/start', generationRateLimitMiddleware, han
 batchesRouter.post('/batches/:batchId/pause', handle((req) => batchQueue.pause(req.params.batchId)));
 batchesRouter.post('/batches/:batchId/resume', handle((req) => batchQueue.resume(req.params.batchId)));
 batchesRouter.post('/batches/:batchId/cancel', handle((req) => batchQueue.cancel(req.params.batchId)));
+batchesRouter.post('/batches/:batchId/approve-all', handle((req) => batchQueue.approveAll(req.params.batchId)));
 
 const outputTypeFrom = (req: Request): OutputType => {
   const type = decodeURIComponent(req.params.outputType) as OutputType;

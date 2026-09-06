@@ -191,7 +191,7 @@ export default function App() {
         </div>
       </nav>
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-8">
-        {workspaceMode === 'single' ? <>
+        <div className={workspaceMode === 'single' ? '' : 'hidden'}>
         {alertState && <StatusAlert {...alertState} onDismiss={() => setAlertState(null)} />}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-5 space-y-6">
@@ -268,7 +268,8 @@ export default function App() {
             ))}
           </div>
         </div>
-        </> : <BatchProduction />}
+        </div>
+        <div className={workspaceMode === 'batch' ? '' : 'hidden'}><BatchProduction /></div>
       </main>
       <footer className="border-t border-stone-200 bg-white py-4 mt-auto"><div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-2"><span>NaapLo Fashion &bull; CP-010 Batch Queue</span><span>Durable jobs &bull; identity-linked views &bull; approved Drive uploads</span></div></footer>
     </div>

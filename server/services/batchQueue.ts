@@ -11,7 +11,7 @@ import { OUTPUT_TYPES, type OutputType } from '../../shared/outputTypes.ts';
 import type { GenerateApiRequest, GenerateApiResponse, ImageFilePayload } from '../../shared/types.ts';
 import { buildOutputFileName } from '../../shared/outputFileName.ts';
 import { BatchStore, type StoredBatch, type StoredBatchView, type StoredCatalogue } from './batchStore.ts';
-import { executeGenerationJob } from './generationService.ts';
+import { executeGenerationJob, GenerationValidationError, validateReferenceImageSet } from './generationService.ts';
 import { storeApprovedOutput, type StoredOutput } from './outputPersistence.ts';
 
 type GenerateDependency = (request: Partial<GenerateApiRequest>, options: { requestedQuality: 'standard' | 'ultra' }) => Promise<GenerateApiResponse>;
@@ -22,6 +22,7 @@ const terminalGeneration = new Set(['SUCCESS', 'FAILED', 'APPROVED', 'UPLOAD_QUE
 const identityReady = new Set(['SUCCESS', 'APPROVED', 'UPLOAD_QUEUED', 'UPLOADING', 'UPLOADED']);
 const needsIdentity = (type: OutputType) => type === 'BACK VIEW' || type === 'SIDE VIEW';
 const now = () => new Date().toISOString();
+const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 export class BatchContractError extends Error {}
 
@@ -29,9 +30,12 @@ export class BatchQueueService {
   private active = 0;
   private pumpScheduled = false;
   private pumping = false;
+  private repumpRequested = false;
   private readonly claimed = new Set<string>();
   private readonly catalogueLocks = new Map<string, Promise<void>>();
   private readonly concurrency: number;
+  private readonly automaticRetries: number;
+  private readonly automaticRetryDelayMs: number;
 
   constructor(
     private readonly store = new BatchStore(),
@@ -40,6 +44,10 @@ export class BatchQueueService {
     concurrency = Number.parseInt(process.env.BATCH_WORKER_CONCURRENCY || '2', 10),
   ) {
     this.concurrency = Math.max(1, Math.min(Number.isFinite(concurrency) ? concurrency : 2, 8));
+    const configuredRetries = Number.parseInt(process.env.BATCH_AUTO_RETRIES || '1', 10);
+    const configuredDelay = Number.parseInt(process.env.BATCH_AUTO_RETRY_DELAY_MS || '3000', 10);
+    this.automaticRetries = Math.max(0, Math.min(Number.isFinite(configuredRetries) ? configuredRetries : 1, 3));
+    this.automaticRetryDelayMs = Math.max(0, Math.min(Number.isFinite(configuredDelay) ? configuredDelay : 3000, 60_000));
   }
 
   async recover(): Promise<void> {
@@ -87,8 +95,11 @@ export class BatchQueueService {
     if (existing.some((item) => item.productId.toLowerCase() === productId.toLowerCase())) throw new BatchContractError(`Product ID ${productId} is duplicated in this batch.`);
     let outputTypes = this.validateOutputTypes(request.outputTypes);
     if (outputTypes.some(needsIdentity) && !outputTypes.includes('FRONT VIEW')) outputTypes = ['FRONT VIEW', ...outputTypes];
+    if (outputTypes.length > 4) throw new BatchContractError('Select up to 4 output views, including FRONT when BACK or SIDE requires identity continuity.');
     if (outputTypes.includes('CLOSE-UP') && !request.closeUpTarget?.trim()) throw new BatchContractError('A Close-Up Target is required when CLOSE-UP is selected.');
-    if (!Array.isArray(request.referenceImages) || request.referenceImages.length < 1 || request.referenceImages.length > 10) throw new BatchContractError('Each catalogue requires 1 to 10 reference images.');
+    if (!Array.isArray(request.referenceImages)) throw new BatchContractError('Each catalogue requires 1 to 10 reference images.');
+    try { validateReferenceImageSet(request.referenceImages); }
+    catch (error) { if (error instanceof GenerationValidationError) throw new BatchContractError(error.message); throw error; }
     if (request.quality !== 'draft' && request.quality !== 'final') throw new BatchContractError('Quality must be draft or final.');
     const ordered = [...outputTypes].sort((a, b) => a === 'FRONT VIEW' ? -1 : b === 'FRONT VIEW' ? 1 : OUTPUT_TYPES.indexOf(a) - OUTPUT_TYPES.indexOf(b));
     const catalogue = await this.store.createCatalogue(batch.id, {
@@ -188,6 +199,30 @@ export class BatchQueueService {
     return this.getBatch(batchId);
   }
 
+  async approveAll(batchId: string): Promise<CatalogueBatchSummary> {
+    const batch = await this.store.loadBatch(batchId);
+    if (batch.status === 'CANCELLED') throw new BatchContractError('A cancelled batch cannot be approved.');
+    let approved = 0;
+    for (const catalogueId of batch.catalogueIds) {
+      await this.withCatalogueLock(`${batchId}:${catalogueId}`, async () => {
+        const catalogue = await this.store.loadCatalogue(batchId, catalogueId);
+        for (const view of catalogue.views) {
+          if (view.status !== 'SUCCESS') continue;
+          view.status = 'UPLOAD_QUEUED';
+          view.approvedAt = now();
+          approved += 1;
+        }
+        await this.store.saveCatalogue(catalogue);
+      });
+    }
+    if (approved === 0) throw new BatchContractError('There are no successful unapproved views to approve.');
+    if (batch.status !== 'PAUSED') batch.status = 'RUNNING';
+    batch.completedAt = undefined;
+    await this.store.saveBatch(batch);
+    this.schedulePump();
+    return this.getBatch(batchId);
+  }
+
   async getResult(batchId: string, catalogueId: string, outputType: OutputType): Promise<BatchViewResultResponse> {
     const { catalogue, view } = await this.viewContext(batchId, catalogueId, outputType);
     if (!view.fileName || !view.mimeType) throw new BatchContractError('This view does not have a generated result yet.');
@@ -211,7 +246,7 @@ export class BatchQueueService {
   }
 
   private validateOutputTypes(value: OutputType[]): OutputType[] {
-    if (!Array.isArray(value) || value.length < 1 || value.length > 9 || value.some((type) => !OUTPUT_TYPES.includes(type))) throw new BatchContractError('Select between 1 and 9 valid output views.');
+    if (!Array.isArray(value) || value.length < 1 || value.length > 4 || value.some((type) => !OUTPUT_TYPES.includes(type))) throw new BatchContractError('Select between 1 and 4 valid output views.');
     return [...new Set(value)];
   }
 
@@ -227,6 +262,7 @@ export class BatchQueueService {
   }
 
   private schedulePump() {
+    if (this.pumping) { this.repumpRequested = true; return; }
     if (this.pumpScheduled) return;
     this.pumpScheduled = true;
     queueMicrotask(() => { this.pumpScheduled = false; void this.pump(); });
@@ -259,6 +295,10 @@ export class BatchQueueService {
       }
     } finally {
       this.pumping = false;
+      if (this.repumpRequested) {
+        this.repumpRequested = false;
+        this.schedulePump();
+      }
     }
   }
 
@@ -266,6 +306,8 @@ export class BatchQueueService {
     for (const batch of (await this.store.listBatches(100)).reverse()) {
       if (batch.status !== 'RUNNING') continue;
       for (const catalogueId of batch.catalogueIds) {
+        const catalogueKeyPrefix = `${batch.id}:${catalogueId}:`;
+        if ([...this.claimed].some((key) => key.startsWith(catalogueKeyPrefix))) continue;
         const catalogue = await this.store.loadCatalogue(batch.id, catalogueId);
         if (catalogue.views.some((view) => view.status === 'GENERATING' || view.status === 'UPLOADING')) continue;
         const keyFor = (view: StoredBatchView) => `${batch.id}:${catalogue.id}:${view.outputType}`;
@@ -316,6 +358,20 @@ export class BatchQueueService {
       Object.assign(view, { status: 'SUCCESS', completedAt: now(), durationMs: result.durationMs, provider: result.provider, model: result.model, fileName: result.image.fileName || buildOutputFileName(catalogue.productId, view.outputType), mimeType: result.image.mimeType, identityUsed: Boolean(identityReference), correction: undefined, approvedAt: undefined, storageUrl: undefined });
       if (view.outputType === 'FRONT VIEW') for (const sibling of catalogue.views) if (needsIdentity(sibling.outputType) && sibling.status === 'BLOCKED_BY_IDENTITY') sibling.status = 'QUEUED';
     } catch (error) {
+      if (view.attempts <= this.automaticRetries) {
+        view.status = 'QUEUED';
+        view.completedAt = undefined;
+        view.error = `Attempt ${view.attempts} failed. Retrying automatically (${view.attempts}/${this.automaticRetries})…`;
+        await this.store.saveCatalogue(catalogue);
+        await delay(this.automaticRetryDelayMs);
+        const latestBatch = await this.store.loadBatch(batch.id);
+        const latestCatalogue = await this.store.loadCatalogue(batch.id, catalogue.id);
+        const latestView = latestCatalogue.views.find((item) => item.outputType === view.outputType);
+        if (latestBatch.status === 'RUNNING' && latestView?.status === 'QUEUED') {
+          return this.processGeneration({ batch: latestBatch, catalogue: latestCatalogue, view: latestView });
+        }
+        return;
+      }
       view.status = 'FAILED'; view.completedAt = now(); view.error = (error as Error).message;
       if (view.outputType === 'FRONT VIEW') for (const sibling of catalogue.views) if (needsIdentity(sibling.outputType) && !terminalGeneration.has(sibling.status)) { sibling.status = 'BLOCKED_BY_IDENTITY'; sibling.error = 'Waiting for a successful FRONT identity.'; }
     }
