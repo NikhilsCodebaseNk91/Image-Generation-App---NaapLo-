@@ -7,8 +7,9 @@ import { OutputTypeSelector } from './components/OutputTypeSelector.tsx';
 import { GeneratedImageViewer } from './components/GeneratedImageViewer.tsx';
 import { StatusAlert } from './components/StatusAlert.tsx';
 import { BatchProduction } from './components/BatchProduction.tsx';
-import type { ApprovedOutputUploadRequest, ApprovedOutputUploadResponse, GenerateApiRequest, GenerateApiResponse, HealthCheckResponse, ImageFilePayload } from '../shared/types.ts';
+import type { ApprovedOutputUploadRequest, ApprovedOutputUploadResponse, GenerateApiRequest, GenerateApiResponse, GenerationQuality, HealthCheckResponse, ImageFilePayload } from '../shared/types.ts';
 import { OUTPUT_TYPES, type OutputType } from '../shared/outputTypes.ts';
+import { estimateOutputCostUsd, formatEstimatedUsd } from '../shared/generationCost.ts';
 
 type JobStatus = 'queued' | 'generating' | 'success' | 'failed';
 interface OutputJob { outputType: OutputType; status: JobStatus; result?: GenerateApiResponse; error?: string; identityUsed?: boolean; approved?: boolean; storageUrl?: string; }
@@ -21,6 +22,8 @@ export default function App() {
   const [referenceImages, setReferenceImages] = useState<ImageFilePayload[]>([]);
   const [selectedOutputTypes, setSelectedOutputTypes] = useState<OutputType[]>(['FRONT VIEW']);
   const [closeUpTarget, setCloseUpTarget] = useState('');
+  const [quality, setQuality] = useState<GenerationQuality>('draft');
+  const [finalSpendConfirmed, setFinalSpendConfirmed] = useState(false);
   const [jobs, setJobs] = useState<OutputJob[]>([]);
   const [acceptedIdentity, setAcceptedIdentity] = useState<AcceptedIdentity | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -32,13 +35,16 @@ export default function App() {
     fetch('/api/health').then((res) => res.json()).then((data: HealthCheckResponse) => setServerHealth(data)).catch((err) => console.warn('Could not reach backend health check:', err));
   }, []);
 
+  useEffect(() => { setFinalSpendConfirmed(false); }, [quality, selectedOutputTypes.length]);
+
   const hasProductId = productId.trim().length > 0;
   const hasReferences = referenceImages.length > 0;
   const needsCloseUpTarget = selectedOutputTypes.includes('CLOSE-UP');
   const hasCloseUpTarget = closeUpTarget.trim().length > 0;
   const hasAcceptedIdentity = acceptedIdentity?.productId === productId.trim() && Boolean(acceptedIdentity.result.image);
-  const canGenerate = hasProductId && hasReferences && selectedOutputTypes.length > 0 && (!needsCloseUpTarget || hasCloseUpTarget) && !isGenerating;
+  const canGenerate = hasProductId && hasReferences && selectedOutputTypes.length > 0 && (!needsCloseUpTarget || hasCloseUpTarget) && (quality !== 'final' || finalSpendConfirmed) && !isGenerating;
   const successfulJobs = jobs.filter((job) => job.status === 'success' && job.result?.image);
+  const estimatedOutputCost = estimateOutputCostUsd(serverHealth?.provider, serverHealth?.model, quality, selectedOutputTypes.length);
 
   const updateJob = (outputType: OutputType, patch: Partial<OutputJob>) => {
     setJobs((current) => current.map((job) => job.outputType === outputType ? { ...job, ...patch } : job));
@@ -54,6 +60,7 @@ export default function App() {
       outputType,
       closeUpTarget: outputType === 'CLOSE-UP' ? closeUpTarget.trim() : undefined,
       correction: options.correction,
+      quality,
       referenceImages: referenceImages.map(({ name, mimeType, data }) => ({ name, mimeType, data })),
       currentGeneratedImage: asImagePayload(options.currentResult, 'current-draft.png'),
       identityReference: needsIdentity(outputType) ? asImagePayload(options.identityResult) : undefined,
@@ -143,6 +150,7 @@ export default function App() {
   const handleRegenerate = async (outputType: OutputType, correction?: string) => {
     const current = jobs.find((job) => job.outputType === outputType);
     if (!current || current.status === 'generating') return;
+    if (quality === 'final' && !window.confirm(`This will make another paid Final-quality request for ${outputType}. Continue?`)) return;
     const frontResult = hasAcceptedIdentity
       ? acceptedIdentity.result
       : jobs.find((job) => job.outputType === 'FRONT VIEW' && job.status === 'success')?.result;
@@ -205,6 +213,15 @@ export default function App() {
                 <input id="product-id-input" type="text" value={productId} disabled={isGenerating} onChange={(event) => { setProductId(event.target.value); setAcceptedIdentity(null); }} placeholder="e.g., NP-2026-SUIT-001" className="w-full rounded-md border border-stone-300 bg-white px-3.5 py-2 text-sm shadow-xs focus:border-stone-900 focus:outline-hidden focus:ring-1 focus:ring-stone-900 disabled:opacity-50 font-mono" />
               </div>
               <ImageUploader images={referenceImages} onAddImages={handleAddImages} onRemoveImage={(index) => { setReferenceImages((items) => items.filter((_, itemIndex) => itemIndex !== index)); setAcceptedIdentity(null); }} maxImages={10} disabled={isGenerating} />
+              <div className="space-y-2 rounded-md border border-stone-200 bg-stone-50 p-3">
+                <label htmlFor="single-quality" className="block text-sm font-medium text-stone-800">Generation quality</label>
+                <select id="single-quality" value={quality} disabled={isGenerating} onChange={(event) => { setQuality(event.target.value as GenerationQuality); setFinalSpendConfirmed(false); }} className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm">
+                  <option value="draft">Draft · economical review output</option>
+                  <option value="final">Final · highest detail and substantially higher cost</option>
+                </select>
+                {estimatedOutputCost !== null && <p className="text-xs text-stone-600">Estimated output charge: at least <strong>{formatEstimatedUsd(estimatedOutputCost)}</strong>. Reference inputs, retries and amendments are additional.</p>}
+                {quality === 'final' && <label className="flex items-start gap-2 text-xs text-amber-900"><input type="checkbox" className="mt-0.5" checked={finalSpendConfirmed} onChange={(event) => setFinalSpendConfirmed(event.target.checked)} /><span>I understand Final quality is a premium paid run.</span></label>}
+              </div>
               <OutputTypeSelector selectedTypes={selectedOutputTypes} onChange={setSelectedOutputTypes} closeUpTarget={closeUpTarget} onChangeCloseUpTarget={setCloseUpTarget} hasIdentityReference={hasAcceptedIdentity} disabled={isGenerating} />
               <div className="pt-2 border-t border-stone-100">
                 <button type="button" id="generate-catalogue-btn" disabled={!canGenerate} onClick={handleGenerate} className="w-full py-3 px-4 rounded-md bg-stone-900 hover:bg-stone-800 text-white font-medium text-sm transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
@@ -213,6 +230,7 @@ export default function App() {
                 {!hasProductId && <p className="text-[11px] text-stone-500 text-center mt-2">Please enter a Product ID to enable generation.</p>}
                 {!hasReferences && <p className="text-[11px] text-stone-500 text-center mt-2">Please upload at least 1 garment reference photograph.</p>}
                 {hasReferences && needsCloseUpTarget && !hasCloseUpTarget && <p className="text-[11px] text-amber-700 text-center mt-2">Close-Up Target is required when CLOSE-UP is selected.</p>}
+                {quality === 'final' && !finalSpendConfirmed && <p className="text-[11px] text-amber-700 text-center mt-2">Confirm the premium Final-quality spend to enable generation.</p>}
               </div>
             </div>
           </div>
@@ -269,9 +287,9 @@ export default function App() {
           </div>
         </div>
         </div>
-        <div className={workspaceMode === 'batch' ? '' : 'hidden'}><BatchProduction /></div>
+        <div className={workspaceMode === 'batch' ? '' : 'hidden'}><BatchProduction serverHealth={serverHealth} /></div>
       </main>
-      <footer className="border-t border-stone-200 bg-white py-4 mt-auto"><div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-2"><span>NaapLo Fashion &bull; CP-010 Batch Queue</span><span>Durable jobs &bull; identity-linked views &bull; approved Drive uploads</span></div></footer>
+      <footer className="border-t border-stone-200 bg-white py-4 mt-auto"><div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-2"><span>NaapLo Fashion &bull; CP-012 Cost Control</span><span>Economical drafts &bull; explicit premium spend &bull; approved Drive uploads</span></div></footer>
     </div>
   );
 }

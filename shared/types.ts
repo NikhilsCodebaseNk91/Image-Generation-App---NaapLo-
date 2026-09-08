@@ -1,5 +1,7 @@
 import type { OutputType } from './outputTypes.ts';
 
+export type GenerationQuality = 'draft' | 'final';
+
 export interface ImageFilePayload {
   name: string;
   mimeType: string;
@@ -13,6 +15,8 @@ export interface GenerateApiRequest {
   outputType: OutputType;
   closeUpTarget?: string;
   correction?: string;
+  /** Draft uses the provider's economical quality; final uses its highest configured quality. */
+  quality?: GenerationQuality;
   /** Optional operator direction; master-prompt garment fidelity rules remain authoritative. */
   additionalInstructions?: string;
   referenceImages: ImageFilePayload[];

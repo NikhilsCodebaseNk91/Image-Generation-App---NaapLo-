@@ -134,7 +134,9 @@ export class OpenAIImageProvider implements ImageGenerationProvider {
     const timeout = Number.isFinite(timeoutValue) && timeoutValue > 0
       ? timeoutValue
       : DEFAULT_TIMEOUT_MS;
-    const client = new OpenAI({ apiKey, timeout, maxRetries: 1 });
+    // The queue owns visible, bounded retries. Keep one queue attempt to one
+    // potentially billable provider request instead of retrying invisibly here.
+    const client = new OpenAI({ apiKey, timeout, maxRetries: 0 });
     const { directiveText } = assemblePrompt(request);
     if (directiveText.length > OPENAI_IMAGE_PROMPT_MAX_CHARS) {
       throw new ImageProviderError(

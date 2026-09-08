@@ -48,6 +48,13 @@ export function validateReferenceImageSet(referenceImages: ImageFilePayload[]): 
   if (totalReferenceBytes > MAX_TOTAL_REFERENCE_BYTES) invalid(`Reference images exceed the ${Math.floor(MAX_TOTAL_REFERENCE_BYTES / 1024 / 1024)} MB combined limit.`);
 }
 
+export function resolveRequestedQuality(
+  quality: GenerateApiRequest['quality'],
+  override?: ProviderGenerateRequest['requestedQuality'],
+): ProviderGenerateRequest['requestedQuality'] {
+  return override || (quality === 'final' ? 'ultra' : 'standard');
+}
+
 export async function executeGenerationJob(
   body: Partial<GenerateApiRequest>,
   options: { requestedQuality?: ProviderGenerateRequest['requestedQuality'] } = {},
@@ -56,12 +63,14 @@ export async function executeGenerationJob(
   const outputType = body.outputType as OutputType;
   const closeUpTarget = typeof body.closeUpTarget === 'string' ? body.closeUpTarget.trim() : '';
   const correction = typeof body.correction === 'string' ? body.correction.trim() : '';
+  const quality = body.quality;
   const additionalInstructions = typeof body.additionalInstructions === 'string' ? body.additionalInstructions.trim() : '';
   const referenceImages = Array.isArray(body.referenceImages) ? body.referenceImages : [];
   const currentGeneratedImage = body.currentGeneratedImage;
   const identityReference = body.identityReference;
 
   if (body.contractVersion !== 'generation-job.v1') invalid('Unsupported or missing contractVersion. Expected "generation-job.v1".');
+  if (quality !== undefined && quality !== 'draft' && quality !== 'final') invalid('Quality must be draft or final.');
   if (!productId) invalid('Product ID is required for every generation job.');
   if (productId.length > 120 || closeUpTarget.length > 300 || correction.length > 2000 || additionalInstructions.length > 2000) invalid('One or more text fields exceed the accepted length limit.');
   if (!outputType) invalid('Output Type is required. Please select one of the approved catalogue views.');
@@ -92,7 +101,7 @@ export async function executeGenerationJob(
     identityReference,
     systemAssets,
     aspectRatio: '3:4',
-    requestedQuality: options.requestedQuality || 'ultra',
+    requestedQuality: resolveRequestedQuality(quality, options.requestedQuality),
   });
 
   let finalImage: {

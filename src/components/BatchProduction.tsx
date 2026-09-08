@@ -3,6 +3,8 @@ import { Check, ChevronDown, ChevronUp, Clock3, Eye, Loader2, Pause, Play, Refre
 import type { AddBatchCatalogueRequest, BatchCatalogueSummary, BatchQuality, BatchViewResultResponse, CatalogueBatchSummary, CreateCatalogueBatchRequest } from '../../shared/batchTypes.ts';
 import { OUTPUT_TYPES, type OutputType } from '../../shared/outputTypes.ts';
 import type { ImageFilePayload } from '../../shared/types.ts';
+import type { HealthCheckResponse } from '../../shared/types.ts';
+import { estimateOutputCostUsd, formatEstimatedUsd } from '../../shared/generationCost.ts';
 import { ImageUploader } from './ImageUploader.tsx';
 import { OutputTypeSelector } from './OutputTypeSelector.tsx';
 
@@ -40,7 +42,7 @@ const statusTone = (status: string) => status === 'UPLOADED' || status === 'COMP
   : status === 'GENERATING' || status === 'RUNNING' || status === 'UPLOADING' ? 'bg-blue-50 text-blue-800 border-blue-200'
   : 'bg-stone-50 text-stone-700 border-stone-200';
 
-export function BatchProduction() {
+export function BatchProduction({ serverHealth }: { serverHealth: HealthCheckResponse | null }) {
   const [count, setCount] = useState(3);
   const [countInput, setCountInput] = useState('3');
   const [defaultViews, setDefaultViews] = useState<OutputType[]>(['FRONT VIEW']);
@@ -56,6 +58,7 @@ export function BatchProduction() {
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [finalSpendConfirmed, setFinalSpendConfirmed] = useState(false);
 
   useEffect(() => {
     api<CatalogueBatchSummary[]>('/api/batches?limit=10').then((items) => {
@@ -86,7 +89,15 @@ export function BatchProduction() {
   const applyDefaults = () => setCards((current) => current.map((card, index) => index < count ? ({ ...card, outputTypes: [...defaultViews], quality: defaultQuality, closeUpTarget: defaultViews.includes('CLOSE-UP') ? defaultCloseUpTarget : card.closeUpTarget }) : card));
   const invalidCards = useMemo(() => activeCards.map((card) => !card.productId.trim() || card.referenceImages.length === 0 || card.outputTypes.length === 0 || (card.outputTypes.includes('CLOSE-UP') && !card.closeUpTarget.trim())), [activeCards]);
   const duplicateIds = new Set(activeCards.map((card) => card.productId.trim().toLowerCase()).filter((id, index, all) => id && all.indexOf(id) !== index));
-  const ready = invalidCards.every((invalid) => !invalid) && duplicateIds.size === 0;
+  const hasFinalCards = activeCards.some((card) => card.quality === 'final');
+  const premiumShape = activeCards.map((card) => `${card.quality}:${card.outputTypes.length}`).join('|');
+  const estimatedOutputCost = activeCards.reduce<number | null>((total, card) => {
+    const estimate = estimateOutputCostUsd(serverHealth?.provider, serverHealth?.model, card.quality, card.outputTypes.length);
+    return total === null || estimate === null ? null : total + estimate;
+  }, 0);
+  const ready = invalidCards.every((invalid) => !invalid) && duplicateIds.size === 0 && (!hasFinalCards || finalSpendConfirmed);
+
+  useEffect(() => { setFinalSpendConfirmed(false); }, [premiumShape]);
 
   useEffect(() => {
     const hasDraftWork = !batch && activeCards.some((card) => card.productId.trim() || card.operatorTag.trim() || card.referenceImages.length > 0 || card.instructions.trim());
@@ -239,6 +250,12 @@ export function BatchProduction() {
         </div>
         <div className="mt-4"><OutputTypeSelector selectedTypes={defaultViews} onChange={setDefaultViews} closeUpTarget={defaultCloseUpTarget} onChangeCloseUpTarget={setDefaultCloseUpTarget} /></div>
         <p className="mt-3 flex items-center gap-2 text-xs text-stone-500"><Clock3 className="h-4 w-4" />All catalogue cards and selected views enter the queue. Two views run concurrently; failures retry once automatically. BACK and SIDE wait for that catalogue’s FRONT identity.</p>
+        <div className="mt-3 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs text-stone-700">
+          {estimatedOutputCost !== null
+            ? <p>Estimated output charge for the active cards: at least <strong>{formatEstimatedUsd(estimatedOutputCost)}</strong>. Reference inputs, retries and amendments are additional.</p>
+            : <p>Generation cost depends on the configured provider. Review provider billing before starting a large batch.</p>}
+          {hasFinalCards && <label className="mt-2 flex items-start gap-2 text-amber-900"><input type="checkbox" className="mt-0.5" checked={finalSpendConfirmed} onChange={(event) => setFinalSpendConfirmed(event.target.checked)} /><span>I understand this batch contains Final-quality premium requests.</span></label>}
+        </div>
       </section>
 
       {error && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
@@ -261,6 +278,7 @@ export function BatchProduction() {
       </div>
       <button disabled={!ready || busy} onClick={startBatch} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-stone-900 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}{busy ? `Preparing queue… ${preparingProgress}/${activeCards.length} cards accepted` : `Queue all ${activeCards.length} catalogues`}</button>
       {!ready && <p className="text-center text-xs text-stone-500">Complete every card and use a unique Product ID for each catalogue.</p>}
+      {hasFinalCards && !finalSpendConfirmed && <p className="text-center text-xs text-amber-700">Confirm the premium Final-quality spend before queueing the batch.</p>}
     </div>
   );
 }

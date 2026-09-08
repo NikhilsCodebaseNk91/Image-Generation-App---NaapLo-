@@ -76,6 +76,10 @@ Open the displayed Google authorization URL and approve Drive access. The callba
 
 After authorization, clicking **Approve & Upload** creates or reuses a Product ID subfolder and creates or replaces the deterministic PNG. Without complete output-storage credentials, approval remains local and the app clearly reports that storage is not configured. The service account configuration remains available independently for the read-only prompt and reference assets used by CP-005.
 
+### Generation cost controls (CP-012)
+
+Single Catalogue and Batch Production default to economical Draft quality. Final quality is an explicit premium choice and requires operator acknowledgement before work is submitted. When OpenAI `gpt-image-2` is configured, the UI shows an output-only minimum estimate; reference-image input, retries, amendments, taxes, and provider price changes are excluded. The OpenAI SDK does not retry invisibly (`maxRetries: 0`); the durable batch queue owns the one bounded, visible automatic retry.
+
 ## Generation API transport
 
 `POST /api/generate` uses JSON with base64-encoded image payloads (`Content-Type: application/json`).

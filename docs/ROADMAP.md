@@ -48,3 +48,14 @@
 - **Persistent Product Catalog History:** Searchable gallery of all generated and approved catalogue items.
 - **Usage Quotas & Billing:** Studio budget management and model token tracking.
 - **Background Worker Queues:** Celery/BullMQ job queues for asynchronous batch catalogue processing.
+
+---
+
+## Phase 6 / CP-012: Generation Cost Control — Active
+
+- Make economical Draft quality the default in both single and batch production.
+- Show a cost preflight before provider work and require explicit confirmation for premium Final jobs.
+- Keep one visible queue attempt to one provider request; prevent hidden SDK retries.
+- Measure cost per approved output and benchmark lower-cost provider adapters before changing the production default.
+- Preserve garment fidelity, identity continuity, independent view recovery, and approved-only Drive upload as non-negotiable acceptance gates.
+- CP-009 Hostinger deployment remains deferred by project-owner direction.
