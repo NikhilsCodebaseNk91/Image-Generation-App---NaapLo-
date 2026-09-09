@@ -223,6 +223,14 @@ export class OpenAIImageProvider implements ImageGenerationProvider {
         provider: this.name,
         model: modelName,
         durationMs: Date.now() - startTime,
+        usage: response.usage ? {
+          inputTokens: response.usage.input_tokens,
+          inputTextTokens: response.usage.input_tokens_details?.text_tokens,
+          inputImageTokens: response.usage.input_tokens_details?.image_tokens,
+          outputTokens: response.usage.output_tokens,
+          outputImageTokens: response.usage.output_tokens_details?.image_tokens ?? response.usage.output_tokens,
+          totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+        } : undefined,
       };
     } catch (error: unknown) {
       if ((error as Error)?.message === 'OPENAI_NO_IMAGE') {

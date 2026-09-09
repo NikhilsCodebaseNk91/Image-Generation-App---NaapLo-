@@ -1,5 +1,5 @@
 import type { OutputType } from './outputTypes.ts';
-import type { GenerateApiResponse, ImageFilePayload } from './types.ts';
+import type { GenerateApiResponse, GenerationCost, GenerationUsage, ImageFilePayload } from './types.ts';
 
 export type BatchQuality = 'draft' | 'final';
 export type BatchStatus =
@@ -58,6 +58,11 @@ export interface BatchViewSummary {
   approvedAt?: string;
   storageUrl?: string;
   fileName?: string;
+  accountedCostUsd: number;
+  unpricedAttempts: number;
+  containsEstimatedCosts: boolean;
+  lastGenerationCost?: GenerationCost;
+  lastGenerationUsage?: GenerationUsage;
 }
 
 export interface BatchCatalogueSummary {
@@ -93,6 +98,11 @@ export interface CatalogueBatchSummary {
   queuedViews: number;
   estimatedRemainingMs: number;
   averageViewDurationMs?: number;
+  accountedGenerationCostUsd: number;
+  approvedOutputCount: number;
+  costPerApprovedOutputUsd?: number;
+  unpricedAttempts: number;
+  containsEstimatedCosts: boolean;
   catalogues: BatchCatalogueSummary[];
 }
 

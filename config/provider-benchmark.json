@@ -1,0 +1,31 @@
+{
+  "contractVersion": "provider-benchmark.v1",
+  "maxBudgetUsd": 0.50,
+  "candidates": [
+    {
+      "id": "openai-draft",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "estimatedOutputCostUsd": 0.005
+    },
+    {
+      "id": "gemini-flash-image",
+      "provider": "gemini",
+      "model": "gemini-2.5-flash-image",
+      "estimatedOutputCostUsd": 0.039
+    }
+  ],
+  "cases": [
+    {
+      "id": "embroidered-light",
+      "productId": "BENCH-LIGHT-001",
+      "outputTypes": ["FRONT VIEW", "BACK VIEW"]
+    },
+    {
+      "id": "embroidered-dark",
+      "productId": "BENCH-DARK-001",
+      "outputTypes": ["FRONT VIEW", "BACK VIEW"]
+    }
+  ],
+  "ratings": []
+}

@@ -80,6 +80,10 @@ After authorization, clicking **Approve & Upload** creates or reuses a Product I
 
 Single Catalogue and Batch Production default to economical Draft quality. Final quality is an explicit premium choice and requires operator acknowledgement before work is submitted. When OpenAI `gpt-image-2` is configured, the UI shows an output-only minimum estimate; reference-image input, retries, amendments, taxes, and provider price changes are excluded. The OpenAI SDK does not retry invisibly (`maxRetries: 0`); the durable batch queue owns the one bounded, visible automatic retry.
 
+Successful OpenAI responses now return token usage when the Images API exposes it. The server converts complete text-input, image-input, and image-output detail into an accounted USD cost; otherwise it records the disclosed output-only minimum. Batch records accumulate that amount across regeneration and amendment attempts, report cost per approved output, and separately count attempts whose price is unknown.
+
+The provider benchmark is deliberately non-chargeable by default. `npm run benchmark:plan` validates the comparison matrix and its budget cap; `npm run benchmark:score` evaluates completed human ratings for fidelity, identity continuity, usability, latency, usable-output rate, and cost per usable output. Neither command calls an image provider.
+
 ## Generation API transport
 
 `POST /api/generate` uses JSON with base64-encoded image payloads (`Content-Type: application/json`).

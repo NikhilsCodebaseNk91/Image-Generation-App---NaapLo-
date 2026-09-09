@@ -230,6 +230,7 @@ export class BatchQueueService {
     return {
       success: true, batchId, catalogueId, status: view.status, approvedAt: view.approvedAt, storageUrl: view.storageUrl,
       productId: catalogue.productId, outputType, provider: view.provider, model: view.model, durationMs: view.durationMs,
+      usage: view.lastGenerationUsage, cost: view.lastGenerationCost,
       image: { mimeType: view.mimeType, base64, dataUrl: `data:${view.mimeType};base64,${base64}`, fileName: view.fileName },
     };
   }
@@ -355,9 +356,19 @@ export class BatchQueueService {
       }, { requestedQuality: catalogue.quality === 'draft' ? 'standard' : 'ultra' });
       if (!result.success || !result.image) throw new Error(result.error || 'Generation returned no image.');
       await this.store.saveResult(batch.id, catalogue.id, view.outputType, result);
-      Object.assign(view, { status: 'SUCCESS', completedAt: now(), durationMs: result.durationMs, provider: result.provider, model: result.model, fileName: result.image.fileName || buildOutputFileName(catalogue.productId, view.outputType), mimeType: result.image.mimeType, identityUsed: Boolean(identityReference), correction: undefined, approvedAt: undefined, storageUrl: undefined });
+      Object.assign(view, {
+        status: 'SUCCESS', completedAt: now(), durationMs: result.durationMs, provider: result.provider, model: result.model,
+        fileName: result.image.fileName || buildOutputFileName(catalogue.productId, view.outputType), mimeType: result.image.mimeType,
+        identityUsed: Boolean(identityReference), correction: undefined, approvedAt: undefined, storageUrl: undefined,
+        accountedCostUsd: (view.accountedCostUsd || 0) + (result.cost?.amountUsd || 0),
+        unpricedAttempts: (view.unpricedAttempts || 0) + (result.cost ? 0 : 1),
+        containsEstimatedCosts: Boolean(view.containsEstimatedCosts || result.cost?.isMinimum),
+        lastGenerationCost: result.cost,
+        lastGenerationUsage: result.usage,
+      });
       if (view.outputType === 'FRONT VIEW') for (const sibling of catalogue.views) if (needsIdentity(sibling.outputType) && sibling.status === 'BLOCKED_BY_IDENTITY') sibling.status = 'QUEUED';
     } catch (error) {
+      view.unpricedAttempts = (view.unpricedAttempts || 0) + 1;
       if (view.attempts <= this.automaticRetries) {
         view.status = 'QUEUED';
         view.completedAt = undefined;
@@ -411,6 +422,9 @@ export class BatchQueueService {
     const average = durations.length ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length) : Number.parseInt(process.env.BATCH_ESTIMATED_VIEW_MS || '90000', 10);
     const activeViews = allViews.filter((view) => view.status === 'GENERATING' || view.status === 'UPLOADING').length;
     const queuedViews = allViews.filter((view) => view.status === 'QUEUED' || view.status === 'BLOCKED_BY_IDENTITY' || view.status === 'UPLOAD_QUEUED').length;
+    const accountedGenerationCostUsd = allViews.reduce((sum, view) => sum + (view.accountedCostUsd || 0), 0);
+    const approvedOutputCount = allViews.filter((view) => Boolean(view.approvedAt)).length;
+    const unpricedAttempts = allViews.reduce((sum, view) => sum + (view.unpricedAttempts || 0), 0);
     return {
       contractVersion: 'catalogue-batch-status.v1', id: batch.id, status: batch.status,
       expectedCatalogueCount: batch.expectedCatalogueCount, catalogueCount: catalogues.length,
@@ -419,6 +433,11 @@ export class BatchQueueService {
       completedViews: completed.length, failedViews: allViews.filter((view) => view.status === 'FAILED' || view.status === 'BLOCKED_BY_IDENTITY').length,
       activeViews, queuedViews, estimatedRemainingMs: Math.ceil(queuedViews / this.concurrency) * average,
       averageViewDurationMs: durations.length ? average : undefined,
+      accountedGenerationCostUsd,
+      approvedOutputCount,
+      costPerApprovedOutputUsd: approvedOutputCount ? accountedGenerationCostUsd / approvedOutputCount : undefined,
+      unpricedAttempts,
+      containsEstimatedCosts: allViews.some((view) => Boolean(view.containsEstimatedCosts)),
       catalogues: catalogues.map((catalogue) => this.catalogueSummary(catalogue)),
     };
   }
@@ -437,6 +456,11 @@ export class BatchQueueService {
         outputType: view.outputType, status: view.status, attempts: view.attempts, error: view.error, startedAt: view.startedAt,
         completedAt: view.completedAt, durationMs: view.durationMs, hasResult: Boolean(view.fileName), identityUsed: view.identityUsed,
         approvedAt: view.approvedAt, storageUrl: view.storageUrl, fileName: view.fileName,
+        accountedCostUsd: view.accountedCostUsd || 0,
+        unpricedAttempts: view.unpricedAttempts || 0,
+        containsEstimatedCosts: Boolean(view.containsEstimatedCosts),
+        lastGenerationCost: view.lastGenerationCost,
+        lastGenerationUsage: view.lastGenerationUsage,
       })), createdAt: catalogue.createdAt, completedAt: catalogue.completedAt,
     };
   }

@@ -2,6 +2,24 @@ import type { OutputType } from './outputTypes.ts';
 
 export type GenerationQuality = 'draft' | 'final';
 
+export interface GenerationUsage {
+  inputTokens?: number;
+  inputTextTokens?: number;
+  inputImageTokens?: number;
+  outputTokens?: number;
+  outputImageTokens?: number;
+  totalTokens?: number;
+}
+
+export interface GenerationCost {
+  currency: 'USD';
+  amountUsd: number;
+  basis: 'PROVIDER_USAGE' | 'OUTPUT_ESTIMATE';
+  /** True when reference-image/text input charges are not included. */
+  isMinimum: boolean;
+  pricingSource: string;
+}
+
 export interface ImageFilePayload {
   name: string;
   mimeType: string;
@@ -41,6 +59,8 @@ export interface GenerateApiResponse {
   provider?: string;
   model?: string;
   durationMs?: number;
+  usage?: GenerationUsage;
+  cost?: GenerationCost;
   error?: string;
   details?: string;
 }

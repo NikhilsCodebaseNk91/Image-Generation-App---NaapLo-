@@ -51,11 +51,13 @@
 
 ---
 
-## Phase 6 / CP-012: Generation Cost Control — Active
+## Phase 6 / CP-012: Generation Cost Control — Active (live benchmark gate pending)
 
 - Make economical Draft quality the default in both single and batch production.
 - Show a cost preflight before provider work and require explicit confirmation for premium Final jobs.
 - Keep one visible queue attempt to one provider request; prevent hidden SDK retries.
-- Measure cost per approved output and benchmark lower-cost provider adapters before changing the production default.
+- Persist provider usage where exposed, accumulate accounted spend across attempts, and report cost per approved output. Implemented and deterministically verified.
+- Use the budget-capped, non-chargeable benchmark planner/scorer to compare OpenAI Draft with Gemini 2.5 Flash Image on two garments and FRONT/BACK continuity. Framework implemented; live eight-request comparison requires explicit approval of the $0.50 cap.
+- Change the production provider only if the measured usable-output economics pass the benchmark quality gate.
 - Preserve garment fidelity, identity continuity, independent view recovery, and approved-only Drive upload as non-negotiable acceptance gates.
 - CP-009 Hostinger deployment remains deferred by project-owner direction.

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, Edit3, Maximize2, RefreshCw, CheckCircle2, Clock, LockKeyhole, UserCheck, BadgeCheck } from 'lucide-react';
 import type { GenerateApiResponse } from '../../shared/types.ts';
+import { formatEstimatedUsd } from '../../shared/generationCost.ts';
 
 interface GeneratedImageViewerProps {
   result: GenerateApiResponse;
@@ -117,6 +118,12 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
               <BadgeCheck className="w-4 h-4" />
               {approvalActionLabel}
             </button>
+          )}
+          {result.cost && (
+            <p className="mt-1 text-xs text-stone-500">
+              Accounted generation cost: <strong className="text-stone-700">{formatEstimatedUsd(result.cost.amountUsd)}</strong>
+              {result.cost.isMinimum ? ' minimum (input charges excluded)' : ' from provider token usage'}
+            </p>
           )}
           {identityActionLabel && onUseAsIdentity && (
             <button

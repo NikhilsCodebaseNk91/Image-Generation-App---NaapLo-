@@ -190,13 +190,16 @@ export function BatchProduction({ serverHealth }: { serverHealth: HealthCheckRes
             </div>
           </div>
           <div className="mt-5 h-2 overflow-hidden rounded-full bg-stone-100"><div className="h-full bg-stone-900 transition-all" style={{ width: `${percent}%` }} /></div>
-          <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 lg:grid-cols-7">
             <div><span className="block text-stone-500">Status</span><strong>{batch.status.replaceAll('_', ' ')}</strong></div>
             <div><span className="block text-stone-500">Progress</span><strong>{batch.completedViews}/{batch.totalViews} views</strong></div>
             <div><span className="block text-stone-500">Active</span><strong>{batch.activeViews}</strong></div>
             <div><span className="block text-stone-500">Waiting</span><strong>{batch.queuedViews}</strong></div>
             <div><span className="block text-stone-500">ETA</span><strong>{formatDuration(batch.estimatedRemainingMs)}</strong></div>
+            <div><span className="block text-stone-500">Accounted spend</span><strong>{formatEstimatedUsd(batch.accountedGenerationCostUsd)}</strong>{batch.containsEstimatedCosts && <span className="block text-[10px] font-normal text-stone-500">includes minimum estimates</span>}</div>
+            <div><span className="block text-stone-500">Cost / approved</span><strong>{batch.costPerApprovedOutputUsd === undefined ? '—' : formatEstimatedUsd(batch.costPerApprovedOutputUsd)}</strong><span className="block text-[10px] font-normal text-stone-500">{batch.approvedOutputCount} approved</span></div>
           </div>
+          {batch.unpricedAttempts > 0 && <p className="mt-3 text-xs text-amber-800">{batch.unpricedAttempts} attempt{batch.unpricedAttempts === 1 ? '' : 's'} could not be priced from provider metadata; the displayed spend may be incomplete.</p>}
         </section>
 
         <div className="space-y-4">
@@ -206,7 +209,7 @@ export function BatchProduction({ serverHealth }: { serverHealth: HealthCheckRes
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 {catalogue.views.map((view) => (
                   <div key={view.outputType} className="rounded-md border border-stone-200 p-3">
-                    <div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold">{view.outputType}</p><p className="mt-1 text-xs text-stone-500">Attempt {view.attempts}{view.durationMs ? ` · ${(view.durationMs / 1000).toFixed(1)}s` : ''}</p></div><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusTone(view.status)}`}>{view.status.replaceAll('_', ' ')}</span></div>
+                    <div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold">{view.outputType}</p><p className="mt-1 text-xs text-stone-500">Attempt {view.attempts}{view.durationMs ? ` · ${(view.durationMs / 1000).toFixed(1)}s` : ''}{view.accountedCostUsd > 0 ? ` · ${formatEstimatedUsd(view.accountedCostUsd)} accounted` : ''}</p></div><span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusTone(view.status)}`}>{view.status.replaceAll('_', ' ')}</span></div>
                     {view.error && <p className="mt-2 text-xs text-red-700">{view.error}</p>}
                     <div className="mt-3 flex flex-wrap gap-2">
                       {view.hasResult && <button onClick={() => openReview(catalogue, view.outputType)} className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs"><Eye className="h-3.5 w-3.5" />Review</button>}

@@ -1,6 +1,7 @@
 import { OUTPUT_TYPES, type OutputType } from '../../shared/outputTypes.ts';
 import type { GenerateApiRequest, GenerateApiResponse, ImageFilePayload } from '../../shared/types.ts';
 import { buildOutputFileName } from '../../shared/outputFileName.ts';
+import { calculateGenerationCost } from '../../shared/generationCost.ts';
 import { applyNaapLoBranding, normalizeGeneratedImageToPng, requiresNaapLoBranding } from './branding.ts';
 import { getImageProvider } from './imageProvider/index.ts';
 import type { ProviderGenerateRequest } from './imageProvider/types.ts';
@@ -103,6 +104,7 @@ export async function executeGenerationJob(
     aspectRatio: '3:4',
     requestedQuality: resolveRequestedQuality(quality, options.requestedQuality),
   });
+  const resolvedQuality = quality === 'final' || options.requestedQuality === 'ultra' ? 'final' : 'draft';
 
   let finalImage: {
     mimeType: string;
@@ -134,5 +136,7 @@ export async function executeGenerationJob(
     provider: result.provider,
     model: result.model,
     durationMs: result.durationMs,
+    usage: result.usage,
+    cost: calculateGenerationCost(result.provider, result.model, resolvedQuality, result.usage),
   };
 }

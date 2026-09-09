@@ -1,5 +1,5 @@
 import type { OutputType } from '../../../shared/outputTypes.ts';
-import type { ImageFilePayload } from '../../../shared/types.ts';
+import type { GenerationUsage, ImageFilePayload } from '../../../shared/types.ts';
 import type { SystemAsset } from '../systemAssets.ts';
 
 export interface ProviderGenerateRequest {
@@ -26,6 +26,7 @@ export interface ProviderGenerateResult {
   provider: string;
   model: string;
   durationMs: number;
+  usage?: GenerationUsage;
 }
 
 export interface ImageGenerationProvider {

@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promise
 import path from 'node:path';
 import type { BatchQuality, BatchStatus, BatchViewStatus } from '../../shared/batchTypes.ts';
 import type { OutputType } from '../../shared/outputTypes.ts';
-import type { GenerateApiResponse, ImageFilePayload } from '../../shared/types.ts';
+import type { GenerateApiResponse, GenerationCost, GenerationUsage, ImageFilePayload } from '../../shared/types.ts';
 
 export interface StoredBatchView {
   outputType: OutputType;
@@ -21,6 +21,11 @@ export interface StoredBatchView {
   mimeType?: string;
   approvedAt?: string;
   storageUrl?: string;
+  accountedCostUsd?: number;
+  unpricedAttempts?: number;
+  containsEstimatedCosts?: boolean;
+  lastGenerationCost?: GenerationCost;
+  lastGenerationUsage?: GenerationUsage;
 }
 
 export interface StoredCatalogue {
