@@ -62,7 +62,7 @@ export const OUTPUT_TYPE_CONFIGS: Record<OutputType, OutputTypeMeta> = {
   'DESCRIPTIVE CATALOGUE POSTER': {
     type: 'DESCRIPTIVE CATALOGUE POSTER',
     label: 'Descriptive Catalogue Poster',
-    description: 'Editorial lookbook poster format combining main garment portrait with refined NaapLo branding accents.',
+    description: 'Editorial lookbook poster format combining the main garment portrait with refined approved client-brand accents.',
     usesBrandingLogo: true,
   },
   'UNSTITCHED DISPLAY VIEW': {

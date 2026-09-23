@@ -42,7 +42,7 @@ const statusTone = (status: string) => status === 'UPLOADED' || status === 'COMP
   : status === 'GENERATING' || status === 'RUNNING' || status === 'UPLOADING' ? 'bg-blue-50 text-blue-800 border-blue-200'
   : 'bg-stone-50 text-stone-700 border-stone-200';
 
-export function BatchProduction({ serverHealth }: { serverHealth: HealthCheckResponse | null }) {
+export function BatchProduction({ serverHealth, onBatchStarted }: { serverHealth: HealthCheckResponse | null; onBatchStarted?: (batchId: string) => void }) {
   const [count, setCount] = useState(3);
   const [countInput, setCountInput] = useState('3');
   const [defaultViews, setDefaultViews] = useState<OutputType[]>(['FRONT VIEW']);
@@ -59,13 +59,6 @@ export function BatchProduction({ serverHealth }: { serverHealth: HealthCheckRes
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [finalSpendConfirmed, setFinalSpendConfirmed] = useState(false);
-
-  useEffect(() => {
-    api<CatalogueBatchSummary[]>('/api/batches?limit=10').then((items) => {
-      const resumable = items.find((item) => ['RUNNING', 'PAUSED', 'QUEUED', 'REVIEW_REQUIRED'].includes(item.status));
-      if (resumable) setBatch(resumable);
-    }).catch(() => undefined);
-  }, []);
 
   useEffect(() => {
     if (!batch || terminalBatch.has(batch.status) || batch.status === 'PAUSED') return;
@@ -119,7 +112,9 @@ export function BatchProduction({ serverHealth }: { serverHealth: HealthCheckRes
         if (!result.batch) throw new Error('The catalogue card was not accepted by the server.');
         setPreparingProgress(index + 1);
       }
-      setBatch(await api<CatalogueBatchSummary>(`/api/batches/${created.id}/start`, { method: 'POST' }));
+      const started = await api<CatalogueBatchSummary>(`/api/batches/${created.id}/start`, { method: 'POST' });
+      setBatch(started);
+      onBatchStarted?.(started.id);
     } catch (reason) {
       if (createdId) await api(`/api/batches/${createdId}/cancel`, { method: 'POST' }).catch(() => undefined);
       setError(`${(reason as Error).message} Your catalogue cards are still available; correct the issue and queue them again.`);

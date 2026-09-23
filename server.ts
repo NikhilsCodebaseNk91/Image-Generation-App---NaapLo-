@@ -10,6 +10,8 @@ import { getImageProviderConfiguration } from './server/services/imageProvider/i
 import { accessProtectionMiddleware, requestSecurityMiddleware } from './server/middleware/security.ts';
 import { isDriveOutputStorageConfigured } from './server/services/driveSource.ts';
 import { batchQueue } from './server/services/batchQueue.ts';
+import { getClientBrandConfig } from './server/services/clientBrand.ts';
+import { getNaapLoLogoAsset } from './server/services/systemAssets.ts';
 
 const PORT = Number.parseInt(process.env.PORT || '3000', 10);
 const app = express();
@@ -34,8 +36,23 @@ app.get('/api/health', (req, res) => {
     model: providerConfiguration.model,
     hasApiKey: providerConfiguration.hasApiKey,
     outputStorageConfigured: isDriveOutputStorageConfigured(),
+    brand: getClientBrandConfig(),
   };
   res.json(response);
+});
+
+app.get('/api/brand', (_req, res) => {
+  res.json(getClientBrandConfig());
+});
+
+app.get('/api/brand/logo', async (_req, res) => {
+  const logo = await getNaapLoLogoAsset();
+  if (!logo) {
+    res.status(404).json({ success: false, error: 'The configured client logo is unavailable.' });
+    return;
+  }
+  res.setHeader('Cache-Control', 'private, max-age=300');
+  res.type(logo.mimeType).send(Buffer.from(logo.base64, 'base64'));
 });
 
 // Output Types catalog endpoint
@@ -82,7 +99,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`NaapLo Catalogue Generator backend running at http://0.0.0.0:${PORT}`);
+    console.log(`VisionxAI Fashion Catalogue Platform backend running at http://0.0.0.0:${PORT}`);
   });
 }
 

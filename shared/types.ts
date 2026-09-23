@@ -72,6 +72,14 @@ export interface HealthCheckResponse {
   model: string;
   hasApiKey: boolean;
   outputStorageConfigured: boolean;
+  brand: ClientBrandConfig;
+}
+
+export interface ClientBrandConfig {
+  clientDisplayName: string;
+  clientLogoUrl: string;
+  providerDisplayName: 'VisionxAI';
+  providerAttribution: string;
 }
 
 export interface ApprovedOutputUploadRequest {

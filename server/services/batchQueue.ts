@@ -235,6 +235,17 @@ export class BatchQueueService {
     };
   }
 
+  async getReference(batchId: string, catalogueId: string, referenceIndex: number): Promise<ImageFilePayload> {
+    const batch = await this.store.loadBatch(batchId);
+    if (!batch.catalogueIds.includes(catalogueId)) throw new BatchContractError('Catalogue does not belong to this batch.');
+    const catalogue = await this.store.loadCatalogue(batchId, catalogueId);
+    if (!Number.isInteger(referenceIndex) || referenceIndex < 0 || referenceIndex >= catalogue.referenceImages.length) {
+      throw new BatchContractError('Requested reference image does not exist.');
+    }
+    const references = await this.store.loadReferenceImages(catalogue);
+    return references[referenceIndex];
+  }
+
   async getBatch(batchId: string): Promise<CatalogueBatchSummary> {
     const batch = await this.store.loadBatch(batchId);
     const catalogues = await Promise.all(batch.catalogueIds.map((id) => this.store.loadCatalogue(batch.id, id)));

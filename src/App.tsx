@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import JSZip from 'jszip';
 import { Download, Loader2, RefreshCw, Sparkles } from 'lucide-react';
-import { Header } from './components/Header.tsx';
 import { ImageUploader } from './components/ImageUploader.tsx';
 import { OutputTypeSelector } from './components/OutputTypeSelector.tsx';
 import { GeneratedImageViewer } from './components/GeneratedImageViewer.tsx';
 import { StatusAlert } from './components/StatusAlert.tsx';
 import { BatchProduction } from './components/BatchProduction.tsx';
-import type { ApprovedOutputUploadRequest, ApprovedOutputUploadResponse, GenerateApiRequest, GenerateApiResponse, GenerationQuality, HealthCheckResponse, ImageFilePayload } from '../shared/types.ts';
+import { AppShell, type ProductPage } from './components/AppShell.tsx';
+import { HomePage } from './components/HomePage.tsx';
+import { BatchesPage } from './components/BatchesPage.tsx';
+import { ReviewWorkspace } from './components/ReviewWorkspace.tsx';
+import type { ApprovedOutputUploadRequest, ApprovedOutputUploadResponse, ClientBrandConfig, GenerateApiRequest, GenerateApiResponse, GenerationQuality, HealthCheckResponse, ImageFilePayload } from '../shared/types.ts';
 import { OUTPUT_TYPES, type OutputType } from '../shared/outputTypes.ts';
 import { estimateOutputCostUsd, formatEstimatedUsd } from '../shared/generationCost.ts';
 
@@ -15,13 +18,17 @@ type JobStatus = 'queued' | 'generating' | 'success' | 'failed';
 interface OutputJob { outputType: OutputType; status: JobStatus; result?: GenerateApiResponse; error?: string; identityUsed?: boolean; approved?: boolean; storageUrl?: string; }
 interface AcceptedIdentity { productId: string; result: GenerateApiResponse; }
 const needsIdentity = (type: OutputType) => type === 'BACK VIEW' || type === 'SIDE VIEW';
+const defaultBrand: ClientBrandConfig = { clientDisplayName: 'NaapLo', clientLogoUrl: '/api/brand/logo', providerDisplayName: 'VisionxAI', providerAttribution: 'Powered by VisionxAI' };
 
 export default function App() {
+  const [page, setPage] = useState<ProductPage>('home');
+  const [focusBatchId, setFocusBatchId] = useState<string | undefined>();
   const [workspaceMode, setWorkspaceMode] = useState<'single' | 'batch'>('single');
   const [productId, setProductId] = useState('');
   const [referenceImages, setReferenceImages] = useState<ImageFilePayload[]>([]);
   const [selectedOutputTypes, setSelectedOutputTypes] = useState<OutputType[]>(['FRONT VIEW']);
   const [closeUpTarget, setCloseUpTarget] = useState('');
+  const [additionalInstructions, setAdditionalInstructions] = useState('');
   const [quality, setQuality] = useState<GenerationQuality>('draft');
   const [finalSpendConfirmed, setFinalSpendConfirmed] = useState(false);
   const [jobs, setJobs] = useState<OutputJob[]>([]);
@@ -60,6 +67,7 @@ export default function App() {
       outputType,
       closeUpTarget: outputType === 'CLOSE-UP' ? closeUpTarget.trim() : undefined,
       correction: options.correction,
+      additionalInstructions: additionalInstructions.trim() || undefined,
       quality,
       referenceImages: referenceImages.map(({ name, mimeType, data }) => ({ name, mimeType, data })),
       currentGeneratedImage: asImagePayload(options.currentResult, 'current-draft.png'),
@@ -170,16 +178,17 @@ export default function App() {
     setIsDownloadingAll(true);
     try {
       const zip = new JSZip();
+      const clientFilePrefix = (serverHealth?.brand?.clientDisplayName || 'NaapLo').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '') || 'catalogue';
       for (const job of successfulJobs) {
         const image = job.result?.image;
-        if (image) zip.file(image.fileName || `NaapLo-${job.outputType}.png`, image.base64, { base64: true });
+        if (image) zip.file(image.fileName || `${clientFilePrefix}-${job.outputType}.png`, image.base64, { base64: true });
       }
       const archive = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
       const safeProductId = productId.trim().replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '') || 'catalogue';
       const url = URL.createObjectURL(archive);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `NaapLo-${safeProductId}-catalogue-views.zip`;
+      link.download = `${clientFilePrefix}-${safeProductId}-catalogue-views.zip`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -189,16 +198,20 @@ export default function App() {
     }
   };
 
+  const brand = serverHealth?.brand || defaultBrand;
+  const navigate = (next: ProductPage, batchId?: string) => { setFocusBatchId(batchId); setPage(next); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
   return (
-    <div className="min-h-screen bg-stone-100/60 text-stone-900 flex flex-col font-sans">
-      <Header modelName={serverHealth?.model} isHealthy={serverHealth?.status === 'ok'} />
-      <nav className="border-b border-stone-200 bg-white" aria-label="Production mode">
-        <div className="mx-auto flex max-w-7xl gap-1 px-4 sm:px-6">
-          <button type="button" onClick={() => setWorkspaceMode('single')} className={`border-b-2 px-4 py-3 text-sm font-medium ${workspaceMode === 'single' ? 'border-stone-900 text-stone-900' : 'border-transparent text-stone-500 hover:text-stone-800'}`}>Single Catalogue</button>
-          <button type="button" id="batch-production-tab" onClick={() => setWorkspaceMode('batch')} className={`border-b-2 px-4 py-3 text-sm font-medium ${workspaceMode === 'batch' ? 'border-stone-900 text-stone-900' : 'border-transparent text-stone-500 hover:text-stone-800'}`}>Batch Production · up to 30</button>
+    <AppShell brand={brand} page={page} onNavigate={(next) => navigate(next)} isHealthy={serverHealth?.status === 'ok'}>
+      {page === 'home' && <HomePage brand={brand} onCreate={() => navigate('create')} onOpenBatches={() => navigate('batches')} onReview={() => navigate('review')} />}
+      {page === 'batches' && <BatchesPage focusBatchId={focusBatchId} onCreate={() => navigate('create')} onReview={(batchId) => navigate('review', batchId)} />}
+      {page === 'review' && <ReviewWorkspace focusBatchId={focusBatchId} onBackToBatches={(batchId) => navigate('batches', batchId)} />}
+      {page === 'create' && <main className="page-wrap space-y-6">
+        <div className="page-heading"><div><p className="eyebrow text-[var(--muted)]">Guided workspace</p><h1 className="page-title">Create catalogue</h1><p className="page-subtitle">Start with one product. Add more only when you need a production batch.</p></div></div>
+        <div className="segmented-control" role="tablist" aria-label="Creation mode">
+          <button type="button" role="tab" aria-selected={workspaceMode === 'single'} onClick={() => setWorkspaceMode('single')} className={workspaceMode === 'single' ? 'segmented-active' : ''}>Single creation</button>
+          <button type="button" role="tab" aria-selected={workspaceMode === 'batch'} id="batch-production-tab" onClick={() => setWorkspaceMode('batch')} className={workspaceMode === 'batch' ? 'segmented-active' : ''}>Batch creation · up to 30</button>
         </div>
-      </nav>
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-8">
         <div className={workspaceMode === 'single' ? '' : 'hidden'}>
         {alertState && <StatusAlert {...alertState} onDismiss={() => setAlertState(null)} />}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -223,6 +236,10 @@ export default function App() {
                 {quality === 'final' && <label className="flex items-start gap-2 text-xs text-amber-900"><input type="checkbox" className="mt-0.5" checked={finalSpendConfirmed} onChange={(event) => setFinalSpendConfirmed(event.target.checked)} /><span>I understand Final quality is a premium paid run.</span></label>}
               </div>
               <OutputTypeSelector selectedTypes={selectedOutputTypes} onChange={setSelectedOutputTypes} closeUpTarget={closeUpTarget} onChangeCloseUpTarget={setCloseUpTarget} hasIdentityReference={hasAcceptedIdentity} disabled={isGenerating} />
+              <details className="rounded-xl border border-stone-200 bg-stone-50/70 p-3">
+                <summary className="cursor-pointer text-sm font-medium text-stone-800">Special instructions <span className="font-normal text-stone-500">(optional)</span></summary>
+                <textarea value={additionalInstructions} onChange={(event) => setAdditionalInstructions(event.target.value)} disabled={isGenerating} rows={3} maxLength={2000} placeholder="Add only product-specific direction. Garment fidelity rules remain fixed." className="mt-3 w-full resize-none rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm focus:border-stone-900 focus:outline-none" />
+              </details>
               <div className="pt-2 border-t border-stone-100">
                 <button type="button" id="generate-catalogue-btn" disabled={!canGenerate} onClick={handleGenerate} className="w-full py-3 px-4 rounded-md bg-stone-900 hover:bg-stone-800 text-white font-medium text-sm transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
                   {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /><span>Generating selected views...</span></> : <><Sparkles className="w-4 h-4 text-amber-300" /><span>Generate {selectedOutputTypes.length} Catalogue View{selectedOutputTypes.length === 1 ? '' : 's'}</span></>}
@@ -232,6 +249,7 @@ export default function App() {
                 {hasReferences && needsCloseUpTarget && !hasCloseUpTarget && <p className="text-[11px] text-amber-700 text-center mt-2">Close-Up Target is required when CLOSE-UP is selected.</p>}
                 {quality === 'final' && !finalSpendConfirmed && <p className="text-[11px] text-amber-700 text-center mt-2">Confirm the premium Final-quality spend to enable generation.</p>}
               </div>
+              <button type="button" onClick={() => setWorkspaceMode('batch')} className="text-button mx-auto">Add another catalogue and create a batch</button>
             </div>
           </div>
           <div className="lg:col-span-7 space-y-6" id="generation-results">
@@ -287,9 +305,8 @@ export default function App() {
           </div>
         </div>
         </div>
-        <div className={workspaceMode === 'batch' ? '' : 'hidden'}><BatchProduction serverHealth={serverHealth} /></div>
-      </main>
-      <footer className="border-t border-stone-200 bg-white py-4 mt-auto"><div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-2"><span>NaapLo Fashion &bull; CP-012 Cost Control</span><span>Economical drafts &bull; explicit premium spend &bull; approved Drive uploads</span></div></footer>
-    </div>
+        <div className={workspaceMode === 'batch' ? '' : 'hidden'}><BatchProduction serverHealth={serverHealth} onBatchStarted={(batchId) => navigate('batches', batchId)} /></div>
+      </main>}
+    </AppShell>
   );
 }

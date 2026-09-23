@@ -32,6 +32,7 @@ const outputTypeFrom = (req: Request): OutputType => {
 };
 
 batchesRouter.get('/batches/:batchId/catalogues/:catalogueId/views/:outputType', handle((req) => batchQueue.getResult(req.params.batchId, req.params.catalogueId, outputTypeFrom(req))));
+batchesRouter.get('/batches/:batchId/catalogues/:catalogueId/references/:referenceIndex', handle((req) => batchQueue.getReference(req.params.batchId, req.params.catalogueId, Number.parseInt(req.params.referenceIndex, 10))));
 batchesRouter.post('/batches/:batchId/catalogues/:catalogueId/views/:outputType/retry', generationRateLimitMiddleware, handle((req) => batchQueue.retry(req.params.batchId, req.params.catalogueId, outputTypeFrom(req))));
 batchesRouter.post('/batches/:batchId/catalogues/:catalogueId/views/:outputType/amend', generationRateLimitMiddleware, handle((req) => batchQueue.amend(req.params.batchId, req.params.catalogueId, outputTypeFrom(req), String(req.body?.correction || ''))));
 batchesRouter.post('/batches/:batchId/catalogues/:catalogueId/views/:outputType/approve', handle((req) => batchQueue.approve(req.params.batchId, req.params.catalogueId, outputTypeFrom(req))));

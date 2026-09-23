@@ -85,7 +85,7 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
             )}
             {result.image.brandingApplied && (
               <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
-                Exact NaapLo logo applied
+                Approved client logo applied
               </span>
             )}
             {isApproved && (
@@ -174,7 +174,7 @@ export const GeneratedImageViewer: React.FC<GeneratedImageViewerProps> = ({
       <div className="relative group rounded-md border border-stone-200 bg-stone-50/50 flex items-center justify-center overflow-hidden">
         <img
           src={dataUrl}
-          alt={`NaapLo Catalogue - ${result.outputType || 'Generated image'}`}
+          alt={`Catalogue output - ${result.outputType || 'Generated image'}`}
           className="w-full max-h-[640px] object-contain cursor-zoom-in transition-transform duration-200"
           onClick={() => setIsZoomed(true)}
         />
