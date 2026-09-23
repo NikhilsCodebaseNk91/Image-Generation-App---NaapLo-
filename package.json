@@ -11,6 +11,7 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test:cp012": "tsx scripts/cp012AccountingTest.ts",
+    "test:cp013": "tsx scripts/cp013RegressionTest.ts",
     "benchmark:plan": "tsx scripts/providerBenchmark.ts config/provider-benchmark.json",
     "benchmark:score": "tsx scripts/providerBenchmark.ts config/provider-benchmark.json --score"
   },
